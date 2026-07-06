@@ -1,7 +1,9 @@
 <nav class="account-nav" aria-label="Navigation de l’espace client">
   <a href="{{ path('client_account_index') }}" class="{{ app.request.attributes.get('_route') starts with 'client_account' ? 'is-active' : '' }}">Accueil</a>
   <a href="{{ path('client_orders_index') }}" class="{{ app.request.attributes.get('_route') starts with 'client_orders' ? 'is-active' : '' }}">Commandes</a>
+  {% if hodina_chatbot_enabled() %}
   <a href="{{ path('client_chatbot_index') }}" class="{{ app.request.attributes.get('_route') starts with 'client_chatbot' ? 'is-active' : '' }}">Assistant</a>
+  {% endif %}
   <a href="{{ path('client_profile_edit') }}" class="{{ app.request.attributes.get('_route') starts with 'client_profile' ? 'is-active' : '' }}">Profil</a>
   <a href="{{ path('client_security_password') }}" class="{{ app.request.attributes.get('_route') starts with 'client_security' ? 'is-active' : '' }}">Sécurité</a>
 </nav>

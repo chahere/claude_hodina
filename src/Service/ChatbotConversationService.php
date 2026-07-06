@@ -16,14 +16,15 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Orchestration d'un tour de conversation chatbot : construit le contexte,
- * appelle le fournisseur IA configuré et journalise les messages. Ni le
- * contrôleur ni le frontend ne voient jamais autre chose que ce texte.
+ * appelle le fournisseur IA configuré, détecte les cas d'escalade et
+ * journalise les messages. Ni le contrôleur ni le frontend ne voient jamais
+ * autre chose que ce texte.
  */
 final class ChatbotConversationService
 {
     private const MAX_HISTORY_MESSAGES = 20;
 
-    private const FALLBACK_REPLY = 'Désolé, je ne peux pas répondre pour le moment. Réessaie dans quelques instants ou utilise le formulaire de contact.';
+    private const ESCALATION_REPLY = 'Je ne peux pas t’aider complètement sur ce point. Un membre de l’équipe Hodina va te recontacter rapidement.';
 
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
@@ -32,6 +33,7 @@ final class ChatbotConversationService
         private readonly ChatbotAiClientResolver $aiClientResolver,
         private readonly AiChatbotCredentialCipher $credentialCipher,
         private readonly AiChatbotSettingRepository $aiChatbotSettingRepository,
+        private readonly ChatbotEscalationService $escalationService,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -59,35 +61,52 @@ final class ChatbotConversationService
             (new ChatbotMessage())->setRole(ChatbotMessage::ROLE_USER)->setContent($userMessage)
         );
 
-        $systemPrompt = $this->contextBuilder->buildSystemPrompt($conversation->getCustomer());
-        $setting = $this->aiChatbotSettingRepository->getOrCreateSingleton();
-        $apiKey = $this->resolveApiKey($setting->getApiKeyEncrypted());
+        $escalationReason = $this->escalationService->customerRequestsHuman($userMessage)
+            ? 'demande explicite du client'
+            : null;
+        $replyText = null;
 
-        $client = $this->aiClientResolver->resolve($setting->getProvider());
-        $aiReply = $client->generateReply(new ChatbotAiRequest(
-            $systemPrompt,
-            $history,
-            $userMessage,
-            $setting->getModel(),
-            $apiKey,
-        ));
+        if ($escalationReason === null) {
+            $systemPrompt = $this->contextBuilder->buildSystemPrompt($conversation->getCustomer());
+            $setting = $this->aiChatbotSettingRepository->getOrCreateSingleton();
+            $apiKey = $this->resolveApiKey($setting->getApiKeyEncrypted());
 
-        if ($aiReply->successful) {
-            $replyText = $aiReply->replyText;
-        } else {
-            $replyText = self::FALLBACK_REPLY;
-            $this->logger->warning('Échec de réponse du chatbot IA.', [
-                'conversation_id' => $conversation->getId(),
-                'provider' => $setting->getProvider(),
-                'reason' => $aiReply->errorReason,
-            ]);
+            $client = $this->aiClientResolver->resolve($setting->getProvider());
+            $aiReply = $client->generateReply(new ChatbotAiRequest(
+                $systemPrompt,
+                $history,
+                $userMessage,
+                $setting->getModel(),
+                $apiKey,
+            ));
+
+            if (!$aiReply->successful) {
+                $escalationReason = 'échec technique de réponse IA';
+                $this->logger->warning('Échec de réponse du chatbot IA.', [
+                    'conversation_id' => $conversation->getId(),
+                    'provider' => $setting->getProvider(),
+                    'reason' => $aiReply->errorReason,
+                ]);
+            } elseif ($this->escalationService->containsEscalationMarker($aiReply->replyText)) {
+                $escalationReason = 'hors périmètre identifié par l’assistant';
+            } else {
+                $replyText = $aiReply->replyText;
+            }
+        }
+
+        if ($replyText === null) {
+            $replyText = self::ESCALATION_REPLY;
         }
 
         $conversation->addMessage(
             (new ChatbotMessage())->setRole(ChatbotMessage::ROLE_ASSISTANT)->setContent($replyText)
         );
 
-        $this->entityManager->flush();
+        if ($escalationReason !== null) {
+            $this->escalationService->escalate($conversation, $escalationReason);
+        } else {
+            $this->entityManager->flush();
+        }
 
         return $replyText;
     }

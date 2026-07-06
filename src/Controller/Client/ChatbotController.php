@@ -7,6 +7,7 @@ namespace App\Controller\Client;
 use App\Entity\ChatbotMessage;
 use App\Entity\Customer;
 use App\Service\ChatbotConversationService;
+use App\Service\ChatbotFeatureSettingsService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -26,8 +27,14 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 final class ChatbotController extends AbstractController
 {
     #[Route('', name: 'client_chatbot_index', methods: ['GET'])]
-    public function index(ChatbotConversationService $conversationService): Response
+    public function index(ChatbotConversationService $conversationService, ChatbotFeatureSettingsService $featureSettings): Response
     {
+        if (!$featureSettings->isEnabled()) {
+            $this->addFlash('warning', 'L’assistant IA est momentanément indisponible. Utilise le formulaire de contact si besoin.');
+
+            return $this->redirectToRoute('client_account_index');
+        }
+
         $customer = $this->getCurrentCustomer();
         $conversation = $conversationService->getOrCreateActiveConversation($customer);
 
@@ -45,11 +52,16 @@ final class ChatbotController extends AbstractController
     public function send(
         Request $request,
         ChatbotConversationService $conversationService,
+        ChatbotFeatureSettingsService $featureSettings,
         #[Autowire(service: 'limiter.chatbot_per_customer')]
         RateLimiterFactory $perCustomerLimiterFactory,
         #[Autowire(service: 'limiter.chatbot_per_ip')]
         RateLimiterFactory $perIpLimiterFactory,
     ): JsonResponse {
+        if (!$featureSettings->isEnabled()) {
+            return $this->json(['error' => 'L’assistant IA est momentanément indisponible.'], Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
         $payload = json_decode($request->getContent(), true);
         $payload = is_array($payload) ? $payload : [];
 

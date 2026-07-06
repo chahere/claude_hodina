@@ -144,8 +144,11 @@ final class ChatbotContextBuilderService
             'Règles impératives :',
             '- Réponds uniquement à partir des informations fournies ci-dessus. N’invente jamais de statut de commande, de prix ou de produit.',
             '- Ton périmètre : statut de commande, informations de livraison, catalogue et questions générales couvertes par la FAQ.',
-            '- Si la demande sort de ce périmètre (remboursement, litige, réclamation...), si tu ne trouves pas l’information, ou si le client demande explicitement à parler à un humain, dis-le clairement et indique qu’un humain de Hodina va le recontacter.',
             '- Ne donne jamais de conseil de prix, de remise ou de suggestion de produit personnalisée.',
+            sprintf(
+                '- Si la demande sort de ce périmètre (remboursement, litige, réclamation...), si tu ne trouves pas l’information dans ce contexte, ou si le client demande explicitement à parler à un humain : dis-le clairement au client, indique qu’un humain de Hodina va le recontacter, et termine IMPÉRATIVEMENT ta réponse par la mention exacte %s (sur sa propre ligne, sans rien ajouter après).',
+                ChatbotEscalationService::ESCALATION_MARKER
+            ),
         ]);
     }
 
