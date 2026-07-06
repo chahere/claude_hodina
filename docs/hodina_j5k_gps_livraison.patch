@@ -1,0 +1,722 @@
+--- a/src/Entity/Address.php
++++ b/src/Entity/Address.php
+@@ -50,6 +50,15 @@
+     #[ORM\Column(type: 'text', nullable: true)]
+     private ?string $notes = null;
+ 
++    #[ORM\Column(type: 'decimal', precision: 10, scale: 7, nullable: true)]
++    private ?string $gpsLatitude = null;
++
++    #[ORM\Column(type: 'decimal', precision: 10, scale: 7, nullable: true)]
++    private ?string $gpsLongitude = null;
++
++    #[ORM\Column(type: 'decimal', precision: 8, scale: 2, nullable: true)]
++    private ?string $gpsAccuracyMeters = null;
++
+     #[ORM\Column]
+     private \DateTimeImmutable $createdAt;
+ 
+@@ -113,7 +122,73 @@
+     public function setDeliveryZone(?DeliveryZone $deliveryZone): self { $this->deliveryZone = $deliveryZone; return $this; }
+ 
+     public function getNotes(): ?string { return $this->notes; }
+-    public function setNotes(?string $notes): self { $this->notes = $notes; return $this; }
++    public function setNotes(?string $notes): self { $this->notes = $notes !== null ? trim($notes) : null; return $this; }
++
++    public function getGpsLatitude(): ?string { return $this->gpsLatitude; }
++    public function setGpsLatitude(?string $gpsLatitude): self
++    {
++        $this->gpsLatitude = $this->normalizeGpsDecimal($gpsLatitude, 7);
++        return $this;
++    }
++
++    public function getGpsLongitude(): ?string { return $this->gpsLongitude; }
++    public function setGpsLongitude(?string $gpsLongitude): self
++    {
++        $this->gpsLongitude = $this->normalizeGpsDecimal($gpsLongitude, 7);
++        return $this;
++    }
++
++    public function getGpsAccuracyMeters(): ?string { return $this->gpsAccuracyMeters; }
++    public function setGpsAccuracyMeters(?string $gpsAccuracyMeters): self
++    {
++        $this->gpsAccuracyMeters = $this->normalizeGpsDecimal($gpsAccuracyMeters, 2);
++        return $this;
++    }
++
++    public function hasGpsCoordinates(): bool
++    {
++        return $this->gpsLatitude !== null && $this->gpsLongitude !== null;
++    }
++
++    public function getGpsCoordinatesLabel(): ?string
++    {
++        if (!$this->hasGpsCoordinates()) {
++            return null;
++        }
++
++        $label = sprintf('%s, %s', $this->gpsLatitude, $this->gpsLongitude);
++
++        if ($this->gpsAccuracyMeters !== null) {
++            $accuracy = rtrim(rtrim($this->gpsAccuracyMeters, '0'), '.');
++            $label .= sprintf(' (precision ~%s m)', $accuracy !== '' ? $accuracy : '0');
++        }
++
++        return $label;
++    }
++
++    public function getGpsMapUrl(): ?string
++    {
++        if (!$this->hasGpsCoordinates()) {
++            return null;
++        }
++
++        return sprintf('https://www.google.com/maps?q=%s,%s', $this->gpsLatitude, $this->gpsLongitude);
++    }
++
++    private function normalizeGpsDecimal(?string $value, int $scale): ?string
++    {
++        $value = $value !== null ? trim(str_replace(',', '.', $value)) : '';
++
++        if ($value === '') {
++            return null;
++        }
++
++        if (!is_numeric($value)) {
++            return null;
++        }
++
++        return number_format((float) $value, $scale, '.', '');
++    }
+ 
+     public function __toString(): string
+     {
+--- a/src/Entity/CustomerOrder.php
++++ b/src/Entity/CustomerOrder.php
+@@ -60,6 +60,15 @@
+     #[ORM\Column(type: 'text', nullable: true)]
+     private ?string $deliveryAddressNotes = null;
+ 
++    #[ORM\Column(type: 'decimal', precision: 10, scale: 7, nullable: true)]
++    private ?string $deliveryAddressGpsLatitude = null;
++
++    #[ORM\Column(type: 'decimal', precision: 10, scale: 7, nullable: true)]
++    private ?string $deliveryAddressGpsLongitude = null;
++
++    #[ORM\Column(type: 'decimal', precision: 8, scale: 2, nullable: true)]
++    private ?string $deliveryAddressGpsAccuracyMeters = null;
++
+     #[ORM\Column(length: 60, nullable: true)]
+     private ?string $billingAddressLabel = null;
+ 
+@@ -178,6 +187,9 @@
+         $this->deliveryAddressZoneCode = $address?->getDeliveryZone()?->getCode();
+         $this->deliveryAddressZoneName = $address?->getDeliveryZone()?->getName();
+         $this->deliveryAddressNotes = $address?->getNotes();
++        $this->deliveryAddressGpsLatitude = $address?->getGpsLatitude();
++        $this->deliveryAddressGpsLongitude = $address?->getGpsLongitude();
++        $this->deliveryAddressGpsAccuracyMeters = $address?->getGpsAccuracyMeters();
+ 
+         return $this;
+     }
+@@ -204,6 +216,39 @@
+     public function getDeliveryAddressZoneCode(): ?string { return $this->deliveryAddressZoneCode ?? $this->deliveryAddress?->getDeliveryZone()?->getCode(); }
+     public function getDeliveryAddressZoneName(): ?string { return $this->deliveryAddressZoneName ?? $this->deliveryAddress?->getDeliveryZone()?->getName(); }
+     public function getDeliveryAddressNotes(): ?string { return $this->deliveryAddressNotes ?? $this->deliveryAddress?->getNotes(); }
++    public function getDeliveryAddressGpsLatitude(): ?string { return $this->deliveryAddressGpsLatitude ?? $this->deliveryAddress?->getGpsLatitude(); }
++    public function getDeliveryAddressGpsLongitude(): ?string { return $this->deliveryAddressGpsLongitude ?? $this->deliveryAddress?->getGpsLongitude(); }
++    public function getDeliveryAddressGpsAccuracyMeters(): ?string { return $this->deliveryAddressGpsAccuracyMeters ?? $this->deliveryAddress?->getGpsAccuracyMeters(); }
++
++    public function hasDeliveryGpsCoordinates(): bool
++    {
++        return $this->getDeliveryAddressGpsLatitude() !== null && $this->getDeliveryAddressGpsLongitude() !== null;
++    }
++
++    public function getDeliveryGpsCoordinatesLabel(): ?string
++    {
++        if (!$this->hasDeliveryGpsCoordinates()) {
++            return null;
++        }
++
++        $label = sprintf('%s, %s', $this->getDeliveryAddressGpsLatitude(), $this->getDeliveryAddressGpsLongitude());
++
++        if ($this->getDeliveryAddressGpsAccuracyMeters() !== null) {
++            $accuracy = rtrim(rtrim((string) $this->getDeliveryAddressGpsAccuracyMeters(), '0'), '.');
++            $label .= sprintf(' (precision ~%s m)', $accuracy !== '' ? $accuracy : '0');
++        }
++
++        return $label;
++    }
++
++    public function getDeliveryGpsMapUrl(): ?string
++    {
++        if (!$this->hasDeliveryGpsCoordinates()) {
++            return null;
++        }
++
++        return sprintf('https://www.google.com/maps?q=%s,%s', $this->getDeliveryAddressGpsLatitude(), $this->getDeliveryAddressGpsLongitude());
++    }
+ 
+     public function getBillingAddressLabel(): ?string { return $this->billingAddressLabel; }
+     public function getBillingAddressLine1(): ?string { return $this->billingAddressLine1; }
+--- a/src/Form/CheckoutType.php
++++ b/src/Form/CheckoutType.php
+@@ -48,6 +48,18 @@
+             ->add('zone', HiddenType::class, [
+                 'required' => false,
+             ])
++            ->add('gpsLatitude', HiddenType::class, [
++                'mapped' => false,
++                'required' => false,
++            ])
++            ->add('gpsLongitude', HiddenType::class, [
++                'mapped' => false,
++                'required' => false,
++            ])
++            ->add('gpsAccuracyMeters', HiddenType::class, [
++                'mapped' => false,
++                'required' => false,
++            ])
+             ->add('useBillingSameAsDelivery', CheckboxType::class, [
+                 'label' => 'Utiliser cette adresse aussi pour la facturation',
+                 'mapped' => false,
+--- a/src/Controller/CheckoutController.php
++++ b/src/Controller/CheckoutController.php
+@@ -75,6 +75,9 @@
+         'postalCode' => '',
+         'commune' => '',
+         'zone' => '',
++        'gpsLatitude' => '',
++        'gpsLongitude' => '',
++        'gpsAccuracyMeters' => '',
+         'useBillingSameAsDelivery' => true,
+         'billingAddress' => '',
+         'billingPostalCode' => '',
+@@ -103,6 +106,10 @@
+                 $checkoutDefaults['commune'] = $lastDeliveryCommune->getName();
+                 $checkoutDefaults['zone'] = $lastDeliveryCommune->getTerritory();
+             }
++
++            $checkoutDefaults['gpsLatitude'] = $lastAddress->getGpsLatitude() ?? '';
++            $checkoutDefaults['gpsLongitude'] = $lastAddress->getGpsLongitude() ?? '';
++            $checkoutDefaults['gpsAccuracyMeters'] = $lastAddress->getGpsAccuracyMeters() ?? '';
+         }
+ 
+         $billingAddress = $connectedCustomer->getBillingAddress();
+@@ -159,6 +166,9 @@
+             }
+ 
+             $deliveryPostalCode = trim((string) $deliveryCommune->getPostalCode());
++            $gpsLatitude = $this->normalizeGpsLatitude($form->get('gpsLatitude')->getData());
++            $gpsLongitude = $this->normalizeGpsLongitude($form->get('gpsLongitude')->getData());
++            $gpsAccuracyMeters = $this->normalizeGpsAccuracyMeters($form->get('gpsAccuracyMeters')->getData());
+ 
+             // Les champs de facturation sont unmapped dans CheckoutType.
+             // Il ne faut donc pas les lire depuis $form->getData(), sinon Symfony garde
+@@ -269,7 +279,10 @@
+                     ->setLine1((string) ($data['address'] ?? ''))
+                     ->setPostalCode($deliveryPostalCode)
+                     ->setCommune($deliveryCommune->getName())
+-                    ->setDeliveryZone($deliveryZone);
++                    ->setDeliveryZone($deliveryZone)
++                    ->setGpsLatitude($gpsLatitude)
++                    ->setGpsLongitude($gpsLongitude)
++                    ->setGpsAccuracyMeters($gpsAccuracyMeters);
+             }
+ 
+             if (!$address) {
+@@ -293,11 +306,16 @@
+                     ->setLine1($data['address'])
+                     ->setPostalCode($deliveryPostalCode)
+                     ->setCommune($deliveryCommune->getName())
+-                    ->setDeliveryZone($deliveryZone);
++                    ->setDeliveryZone($deliveryZone)
++                    ->setGpsLatitude($gpsLatitude)
++                    ->setGpsLongitude($gpsLongitude)
++                    ->setGpsAccuracyMeters($gpsAccuracyMeters);
+ 
+                 $em->persist($address);
+             }
+ 
++            $this->applyGpsCoordinatesToAddress($address, $gpsLatitude, $gpsLongitude, $gpsAccuracyMeters);
++
+             $billingAddress = $this->findReusableAddress(
+                 $em,
+                 $customer,
+@@ -555,6 +573,68 @@
+         return number_format($amount, 2, ',', ' ');
+     }
+ 
++
++    private function applyGpsCoordinatesToAddress(Address $address, ?string $latitude, ?string $longitude, ?string $accuracyMeters): void
++    {
++        if ($latitude !== null && $longitude !== null) {
++            $address
++                ->setGpsLatitude($latitude)
++                ->setGpsLongitude($longitude)
++                ->setGpsAccuracyMeters($accuracyMeters);
++
++            return;
++        }
++
++        $address
++            ->setGpsLatitude(null)
++            ->setGpsLongitude(null)
++            ->setGpsAccuracyMeters(null);
++    }
++
++    private function normalizeGpsLatitude(mixed $value): ?string
++    {
++        $number = $this->normalizeGpsNumber($value);
++
++        if ($number === null || $number < -90 || $number > 90) {
++            return null;
++        }
++
++        return number_format($number, 7, '.', '');
++    }
++
++    private function normalizeGpsLongitude(mixed $value): ?string
++    {
++        $number = $this->normalizeGpsNumber($value);
++
++        if ($number === null || $number < -180 || $number > 180) {
++            return null;
++        }
++
++        return number_format($number, 7, '.', '');
++    }
++
++    private function normalizeGpsAccuracyMeters(mixed $value): ?string
++    {
++        $number = $this->normalizeGpsNumber($value);
++
++        if ($number === null || $number < 0 || $number > 999999) {
++            return null;
++        }
++
++        return number_format($number, 2, '.', '');
++    }
++
++    private function normalizeGpsNumber(mixed $value): ?float
++    {
++        $value = trim(str_replace(',', '.', (string) $value));
++
++        if ($value === '' || !is_numeric($value)) {
++            return null;
++        }
++
++        return (float) $value;
++    }
++
+     private function findReusableAddress(
+         EntityManagerInterface $em,
+         Customer $customer,
+--- a/src/Controller/Admin/AddressCrudController.php
++++ b/src/Controller/Admin/AddressCrudController.php
+@@ -66,6 +66,25 @@
+         yield AssociationField::new('deliveryZone', 'Zone')
+             ->setHelp('Livraison : PT ou GT. Facturation : AUTRE — Autre.');
+ 
++        yield FormField::addPanel('Position GPS')
++            ->setHelp('Facultatif. Utile a Mayotte quand l’adresse terrain ne suffit pas.');
++
++        yield TextField::new('gpsLatitude', 'Latitude')
++            ->hideOnIndex()
++            ->setHelp('Format decimal, exemple : -12.7801234.');
++
++        yield TextField::new('gpsLongitude', 'Longitude')
++            ->hideOnIndex()
++            ->setHelp('Format decimal, exemple : 45.2271234.');
++
++        yield TextField::new('gpsAccuracyMeters', 'Precision GPS (m)')
++            ->hideOnIndex()
++            ->setHelp('Optionnel. Rempli automatiquement depuis le navigateur si disponible.');
++
++        yield TextField::new('gpsMapUrl', 'Lien carte')
++            ->onlyOnDetail()
++            ->formatValue(static fn (?string $value): string => $value ? sprintf('<a href="%s" target="_blank" rel="noopener">Ouvrir dans Google Maps</a>', htmlspecialchars($value, ENT_QUOTES)) : '-');
++
+         yield TextareaField::new('notes', 'Notes')
+             ->hideOnIndex();
+     }
+--- a/src/Controller/Admin/CustomerOrderCrudController.php
++++ b/src/Controller/Admin/CustomerOrderCrudController.php
+@@ -112,6 +112,10 @@
+             ->setFormTypeOption('disabled', true)
+             ->setHelp('Snapshot figé au moment de la commande. Ne dépend pas du carnet d’adresses client.');
+ 
++        yield TextField::new('deliveryGpsMapUrl', 'GPS livraison')
++            ->onlyOnDetail()
++            ->formatValue(static fn (?string $value): string => $value ? sprintf('<a href="%s" target="_blank" rel="noopener">Ouvrir dans Google Maps</a>', htmlspecialchars($value, ENT_QUOTES)) : 'Non renseigné');
++
+         yield TextField::new('deliveryAddressZoneCode', 'Zone adresse')
+             ->hideOnForm();
+ 
+--- a/templates/cart/index.html.twig
++++ b/templates/cart/index.html.twig
+@@ -162,6 +162,9 @@
+               <p class="muted small" style="margin:2px 0 0;">
+                 Zone : <span data-delivery-current-zone>Choisis une commune livrée.</span>
+               </p>
++              <p class="muted small" style="margin:2px 0 0;" data-delivery-current-gps>
++                GPS : non renseigné
++              </p>
+             </div>
+ 
+             <details class="checkout-address-details" id="checkout-address-details" {{ (not form.address.vars.value or form.address.vars.errors|length > 0 or form.commune.vars.errors|length > 0 or form.postalCode.vars.errors|length > 0 or form.zone.vars.errors|length > 0) ? 'open' : '' }}>
+@@ -186,6 +189,9 @@
+                       data-postal-code="{{ addr.postalCode }}"
+                       data-commune="{{ addr.commune }}"
+                       data-zone="{{ addr.deliveryZone ? addr.deliveryZone.code : 'GT' }}"
++                      data-gps-latitude="{{ addr.gpsLatitude }}"
++                      data-gps-longitude="{{ addr.gpsLongitude }}"
++                      data-gps-accuracy="{{ addr.gpsAccuracyMeters }}"
+                     >
+                       <strong>{{ addr.label ?: 'Adresse' }}</strong><br>
+                       <span class="muted small">{{ addr.line1 }}</span>
+@@ -193,6 +199,9 @@
+                       {% if addr.deliveryZone %}
+                         <br><span class="muted small">Zone : {{ addr.deliveryZone.code }}</span>
+                       {% endif %}
++                      {% if addr.gpsMapUrl %}
++                        <br><span class="muted small">GPS enregistré</span>
++                      {% endif %}
+                     </button>
+                   {% endfor %}
+                 </div>
+@@ -232,6 +241,9 @@
+               </div>
+ 
+               {{ form_widget(form.zone) }}
++              {{ form_widget(form.gpsLatitude) }}
++              {{ form_widget(form.gpsLongitude) }}
++              {{ form_widget(form.gpsAccuracyMeters) }}
+               <div class="client-form-field{% if form.zone.vars.errors|length > 0 %} has-error{% endif %}">
+                 <span class="client-form-label">Zone de livraison</span>
+                 <div id="checkout-zone-preview" class="client-form-control" aria-live="polite">
+@@ -242,6 +254,18 @@
+                   <div class="client-form-errors">{{ form_errors(form.zone) }}</div>
+                 {% endif %}
+               </div>
++
++              <div class="client-form-field">
++                <span class="client-form-label">Position GPS de livraison</span>
++                <div class="client-form-control" style="height:auto; min-height:44px;">
++                  <div data-gps-status>Position GPS non renseignée.</div>
++                  <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
++                    <button type="button" class="btn btn-secondary" id="use-current-location">Utiliser ma position actuelle</button>
++                    <button type="button" class="btn btn-link danger" id="clear-current-location">Retirer la position GPS</button>
++                  </div>
++                </div>
++                <p class="muted small">Facultatif mais recommandé à Mayotte. Le livreur pourra ouvrir la position dans Google Maps.</p>
++              </div>
+             </div>
+             </details>
+ 
+@@ -580,10 +604,14 @@
+     const communeInput = form.querySelector('#checkout_commune');
+     const postalInput = form.querySelector('#checkout_postalCode');
+     const zoneInput = form.querySelector('#checkout_zone');
++    const gpsLatInput = form.querySelector('#checkout_gpsLatitude');
++    const gpsLngInput = form.querySelector('#checkout_gpsLongitude');
++    const gpsAccuracyInput = form.querySelector('#checkout_gpsAccuracyMeters');
+ 
+     const addressEl = document.querySelector('[data-delivery-current-address]');
+     const communeEl = document.querySelector('[data-delivery-current-commune]');
+     const zoneEl = document.querySelector('[data-delivery-current-zone]');
++    const gpsEl = document.querySelector('[data-delivery-current-gps]');
+ 
+     const communeLabel = communeInput && communeInput.selectedIndex >= 0
+       ? (communeInput.options[communeInput.selectedIndex].textContent || '').replace(/\s+—\s+.*$/, '').trim()
+@@ -598,6 +626,15 @@
+       ? ((postalCode ? postalCode + ' ' : '') + (communeLabel || 'Commune à choisir'))
+       : 'Commune à choisir';
+     if (zoneEl) zoneEl.textContent = formatZoneLabel(zone);
++
++    if (gpsEl) {
++      const lat = gpsLatInput ? (gpsLatInput.value || '').trim() : '';
++      const lng = gpsLngInput ? (gpsLngInput.value || '').trim() : '';
++      const accuracy = gpsAccuracyInput ? (gpsAccuracyInput.value || '').trim() : '';
++      gpsEl.textContent = lat && lng
++        ? 'GPS : ' + lat + ', ' + lng + (accuracy ? ' (~' + Math.round(parseFloat(accuracy)) + ' m)' : '')
++        : 'GPS : non renseigné';
++    }
+   };
+ 
+   const logisticsBox = document.getElementById('checkout-logistics-preview');
+@@ -646,6 +683,25 @@
+     wrap.hidden = !routes || routes.length === 0;
+   };
+ 
++  const updateGpsStatus = () => {
++    const gpsStatus = document.querySelector('[data-gps-status]');
++    const latInput = form.querySelector('#checkout_gpsLatitude');
++    const lngInput = form.querySelector('#checkout_gpsLongitude');
++    const accuracyInput = form.querySelector('#checkout_gpsAccuracyMeters');
++
++    if (!gpsStatus || !latInput || !lngInput) return;
++
++    const lat = (latInput.value || '').trim();
++    const lng = (lngInput.value || '').trim();
++    const accuracy = accuracyInput ? (accuracyInput.value || '').trim() : '';
++
++    gpsStatus.textContent = lat && lng
++      ? 'Position GPS enregistree : ' + lat + ', ' + lng + (accuracy ? ' (~' + Math.round(parseFloat(accuracy)) + ' m)' : '')
++      : 'Position GPS non renseignee.';
++
++    updateDeliveryCurrentSummary();
++  };
++
+   const renderLogisticsPreview = (payload) => {
+     if (!logisticsBox || !payload || !payload.preview) return;
+ 
+@@ -799,11 +855,19 @@
+       const communeInput = document.querySelector('#checkout_commune');
+       const existingInput = document.querySelector('#checkout_existingAddressId');
+ 
++      const gpsLatInput = document.querySelector('#checkout_gpsLatitude');
++      const gpsLngInput = document.querySelector('#checkout_gpsLongitude');
++      const gpsAccuracyInput = document.querySelector('#checkout_gpsAccuracyMeters');
++
+       if(addressInput) addressInput.value = btnAddr.dataset.line1 || '';
+       if(communeInput) communeInput.value = btnAddr.dataset.commune || '';
+       if(existingInput) existingInput.value = btnAddr.dataset.addressId || '';
++      if(gpsLatInput) gpsLatInput.value = btnAddr.dataset.gpsLatitude || '';
++      if(gpsLngInput) gpsLngInput.value = btnAddr.dataset.gpsLongitude || '';
++      if(gpsAccuracyInput) gpsAccuracyInput.value = btnAddr.dataset.gpsAccuracy || '';
+ 
+       applyCommuneMetadata();
++      updateGpsStatus();
+       refreshLogisticsPreview();
+ 
+       document.querySelectorAll('.saved-address-btn').forEach(b => b.classList.remove('is-selected'));
+@@ -829,7 +893,15 @@
+           communeInput.value = '';
+       }
+ 
++      const gpsLatInput = document.querySelector('#checkout_gpsLatitude');
++      const gpsLngInput = document.querySelector('#checkout_gpsLongitude');
++      const gpsAccuracyInput = document.querySelector('#checkout_gpsAccuracyMeters');
++      if(gpsLatInput) gpsLatInput.value = '';
++      if(gpsLngInput) gpsLngInput.value = '';
++      if(gpsAccuracyInput) gpsAccuracyInput.value = '';
++
+       applyCommuneMetadata();
++      updateGpsStatus();
+       refreshLogisticsPreview();
+       document.querySelectorAll('.saved-address-btn').forEach(b => b.classList.remove('is-selected'));
+       refresh();
+@@ -842,7 +914,55 @@
+     if(selected) selected.classList.add('is-selected');
+   }
+ 
++  const useLocationBtn = document.getElementById('use-current-location');
++  if (useLocationBtn) {
++    useLocationBtn.addEventListener('click', () => {
++      const gpsStatus = document.querySelector('[data-gps-status]');
++      const latInput = form.querySelector('#checkout_gpsLatitude');
++      const lngInput = form.querySelector('#checkout_gpsLongitude');
++      const accuracyInput = form.querySelector('#checkout_gpsAccuracyMeters');
++
++      if (!navigator.geolocation || !latInput || !lngInput) {
++        if (gpsStatus) gpsStatus.textContent = 'La geolocalisation n’est pas disponible sur ce navigateur.';
++        return;
++      }
++
++      if (gpsStatus) gpsStatus.textContent = 'Recherche de ta position GPS...';
++
++      navigator.geolocation.getCurrentPosition((position) => {
++        latInput.value = Number(position.coords.latitude).toFixed(7);
++        lngInput.value = Number(position.coords.longitude).toFixed(7);
++        if (accuracyInput && position.coords.accuracy !== null && position.coords.accuracy !== undefined) {
++          accuracyInput.value = Number(position.coords.accuracy).toFixed(2);
++        }
++        updateGpsStatus();
++        refresh();
++      }, () => {
++        if (gpsStatus) gpsStatus.textContent = 'Impossible de recuperer la position. Verifie l’autorisation GPS du navigateur.';
++      }, {
++        enableHighAccuracy: true,
++        timeout: 12000,
++        maximumAge: 60000
++      });
++    });
++  }
++
++  const clearLocationBtn = document.getElementById('clear-current-location');
++  if (clearLocationBtn) {
++    clearLocationBtn.addEventListener('click', () => {
++      const latInput = form.querySelector('#checkout_gpsLatitude');
++      const lngInput = form.querySelector('#checkout_gpsLongitude');
++      const accuracyInput = form.querySelector('#checkout_gpsAccuracyMeters');
++      if (latInput) latInput.value = '';
++      if (lngInput) lngInput.value = '';
++      if (accuracyInput) accuracyInput.value = '';
++      updateGpsStatus();
++      refresh();
++    });
++  }
++
+   applyCommuneMetadata();
++  updateGpsStatus();
+   refreshLogisticsPreview();
+   refresh();
+ })();
+--- a/templates/admin/customer_order/operational_sheet.html.twig
++++ b/templates/admin/customer_order/operational_sheet.html.twig
+@@ -211,6 +211,20 @@
+                         {% endif %}
+                     </div>
+                 </div>
++                {% if order.deliveryGpsMapUrl %}
++                    <div class="hodina-row">
++                        <div class="hodina-label">GPS</div>
++                        <div class="hodina-value">
++                            <a class="btn btn-primary btn-sm" href="{{ order.deliveryGpsMapUrl }}" target="_blank" rel="noopener">Ouvrir la carte</a><br>
++                            <span class="text-muted">{{ order.deliveryGpsCoordinatesLabel }}</span>
++                        </div>
++                    </div>
++                {% else %}
++                    <div class="hodina-row">
++                        <div class="hodina-label">GPS</div>
++                        <div class="hodina-value">Non renseigné</div>
++                    </div>
++                {% endif %}
+                 {% if order.deliveryAddressNotes %}
+                     <div class="hodina-row">
+                         <div class="hodina-label">Notes</div>
+--- a/templates/courier/dashboard.html.twig
++++ b/templates/courier/dashboard.html.twig
+@@ -37,6 +37,9 @@
+                         {% if order.deliveryAddressLine2 %}{{ order.deliveryAddressLine2 }}<br>{% endif %}
+                         {{ order.deliveryAddressPostalCode }} {{ order.deliveryAddressCommune }}
+                     </p>
++                    {% if order.deliveryGpsMapUrl %}
++                        <p class="courier-note">GPS : {{ order.deliveryGpsCoordinatesLabel }}</p>
++                    {% endif %}
+                     {% if order.deliveryAddressNotes %}
+                         <p class="courier-note">{{ order.deliveryAddressNotes }}</p>
+                     {% endif %}
+@@ -61,6 +64,10 @@
+             </div>
+ 
+             <div class="courier-actions">
++                {% if order.deliveryGpsMapUrl %}
++                    <a class="courier-btn courier-btn--primary" href="{{ order.deliveryGpsMapUrl }}" target="_blank" rel="noopener">Carte GPS</a>
++                {% endif %}
++
+                 {% if phone %}
+                     <a class="courier-btn courier-btn--light" href="tel:{{ phone }}">Appeler</a>
+                     <a class="courier-btn courier-btn--light" href="{{ sms_url }}">SMS client</a>
+--- a/migrations/Version20260619102000.php
++++ b/migrations/Version20260619102000.php
+@@ -0,0 +1,28 @@
++<?php
++
++declare(strict_types=1);
++
++namespace DoctrineMigrations;
++
++use Doctrine\DBAL\Schema\Schema;
++use Doctrine\Migrations\AbstractMigration;
++
++final class Version20260619102000 extends AbstractMigration
++{
++    public function getDescription(): string
++    {
++        return 'J5K: ajoute les coordonnees GPS facultatives sur les adresses de livraison et leur snapshot commande.';
++    }
++
++    public function up(Schema $schema): void
++    {
++        $this->addSql('ALTER TABLE address ADD gps_latitude NUMERIC(10, 7) DEFAULT NULL, ADD gps_longitude NUMERIC(10, 7) DEFAULT NULL, ADD gps_accuracy_meters NUMERIC(8, 2) DEFAULT NULL');
++        $this->addSql('ALTER TABLE customer_order ADD delivery_address_gps_latitude NUMERIC(10, 7) DEFAULT NULL, ADD delivery_address_gps_longitude NUMERIC(10, 7) DEFAULT NULL, ADD delivery_address_gps_accuracy_meters NUMERIC(8, 2) DEFAULT NULL');
++    }
++
++    public function down(Schema $schema): void
++    {
++        $this->addSql('ALTER TABLE customer_order DROP delivery_address_gps_latitude, DROP delivery_address_gps_longitude, DROP delivery_address_gps_accuracy_meters');
++        $this->addSql('ALTER TABLE address DROP gps_latitude, DROP gps_longitude, DROP gps_accuracy_meters');
++    }
++}
+--- a/docs/README_MAJ_J5K_GPS_LIVRAISON.md
++++ b/docs/README_MAJ_J5K_GPS_LIVRAISON.md
+@@ -0,0 +1,47 @@
++# README MAJ J5K — GPS livraison
++
++## Objectif
++
++J5K ajoute une position GPS facultative sur les adresses de livraison afin d'aider les livreurs Hodina a retrouver les clients a Mayotte, ou les adresses textuelles peuvent etre insuffisantes.
++
++## Perimetre pilote
++
++- Ajout de `gpsLatitude`, `gpsLongitude` et `gpsAccuracyMeters` sur `Address`.
++- Snapshot GPS fige sur `CustomerOrder` au moment de la commande.
++- Bouton client `Utiliser ma position actuelle` au panier / checkout.
++- Reutilisation de la position GPS quand une adresse enregistree est selectionnee.
++- Liens Google Maps dans la fiche terrain admin et le portail livreur.
++- Aucun geocodage automatique, aucune cle API, aucune dependance externe obligatoire.
++
++## Choix volontaire
++
++Le GPS reste facultatif. Une commande ne doit pas etre bloquee si le client refuse la geolocalisation ou si son navigateur ne la supporte pas. L'adresse textuelle + commune livree restent obligatoires.
++
++## Donnees personnelles
++
++La position GPS est une donnee sensible de livraison. Elle doit etre limitee a l'usage operationnel Hodina : admin, livreur assigne, support commande. Ne pas l'exposer dans les emails publics ni dans les pages catalogue.
++
++## Recette locale
++
++1. Créer une adresse de livraison depuis le panier.
++2. Cliquer sur `Utiliser ma position actuelle`.
++3. Autoriser la geolocalisation dans le navigateur.
++4. Verifier que le recap affiche une latitude/longitude.
++5. Valider la commande.
++6. Verifier en admin que la fiche terrain affiche `Ouvrir la carte`.
++7. Passer la commande en `prete` et verifier dans `/livreur` que le bouton `Carte GPS` apparait.
++8. Verifier que le lien ouvre Google Maps.
++
++## Commandes
++
++```powershell
++php bin/console doctrine:migrations:migrate -n
++php bin/console doctrine:schema:validate
++php bin/console cache:clear
++```
++
++## Limites post-pilote
++
++- Ajouter une saisie manuelle carte si le client n'est pas sur le lieu de livraison au moment de la commande.
++- Ajouter un controle de coherence approximatif commune <-> GPS.
++- Ajouter une politique de retention / anonymisation des coordonnees anciennes.
+--- a/docs/COMMIT_J5K_GPS_LIVRAISON.md
++++ b/docs/COMMIT_J5K_GPS_LIVRAISON.md
+@@ -0,0 +1,27 @@
++# COMMIT J5K — GPS livraison
++
++## Branche
++
++`pilot/j5k-gps-livraison`
++
++## Commit conseille
++
++```bash
++git commit -m "feat(j5k): add optional gps coordinates for delivery addresses"
++```
++
++## Changements
++
++- Adresse client : coordonnees GPS facultatives.
++- Commande : snapshot GPS de livraison fige au moment de la commande.
++- Checkout : bouton navigateur pour capturer la position actuelle.
++- Admin : lien carte dans la fiche terrain et detail commande.
++- Livreur : bouton `Carte GPS` sur les commandes pretes / en cours.
++- Migration : `Version20260619102000`.
++
++## Points de vigilance
++
++- Le GPS ne remplace pas la commune livree.
++- Le GPS ne doit pas impacter le calcul des frais de livraison pilote, qui reste base sur la commune/zone/logistique.
++- Le GPS ne doit pas bloquer la commande.
++- Le GPS est une donnee personnelle precise : ne pas l'afficher partout.

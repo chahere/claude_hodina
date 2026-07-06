@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Code collecte Hodina</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #24170f; line-height: 1.5;">
+    <p>{{ emailBranding.opening|default('Bonjour,') }}</p>
+
+    <p>
+        Un livreur Hodina est venu récupérer les produits de la commande
+        <strong>{{ orderReference }}</strong>.
+    </p>
+
+    <p style="font-size: 22px; font-weight: bold; padding: 12px 16px; background: #fff7ed; border-radius: 12px; display: inline-block;">
+        Code collecte : {{ code }}
+    </p>
+
+    <p>
+        Donne ce code au livreur uniquement quand les produits sont remis.
+        Ce code permet à Hodina de confirmer que la collecte vendeur a bien eu lieu.
+    </p>
+
+    <p style="color:#7a5f47;font-size:13px;">{{ noReplyNotice|default('Merci de ne pas répondre directement à cet e-mail.') }}</p>
+
+    <p>{{ emailBranding.closing|default('Merci,') }}<br>{{ emailBranding.signature|default('L’équipe Hodina') }}</p>
+</body>
+</html>

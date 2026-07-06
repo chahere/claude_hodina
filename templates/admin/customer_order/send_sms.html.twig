@@ -1,0 +1,158 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}
+    Envoyer un SMS — {{ orderReference }}
+{% endblock %}
+
+{% block main %}
+    <div class="content-panel">
+        <div class="content-panel-body with-background without-header without-footer">
+            <p class="text-muted mb-3">
+                Mode pilote : le bouton <strong>Envoyer le SMS</strong> journalise le SMS dans Hodina, puis ouvre l’application Messages de l’iPhone avec le numéro et le message préremplis. Le provider réel pourra être remplacé ensuite par OVH, Twilio, Brevo ou un autre fournisseur sans changer le workflow admin.
+            </p>
+
+            <div class="mb-3">
+                <a href="{{ urls.detail }}" class="btn btn-secondary">Retour commande</a>
+                <a href="{{ urls.sheet }}" class="btn btn-outline-secondary">Fiche terrain</a>
+            </div>
+
+            <form method="post" class="ea-edit-form" data-sms-templates='{{ templates|json_encode|e('html_attr') }}' data-sms-recipients='{{ recipients|json_encode|e('html_attr') }}'>
+                <input type="hidden" name="_token" value="{{ csrf_token('send_sms_order_' ~ order.id) }}">
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="field-text form-group">
+                            <label for="recipient_key" class="form-control-label">Destinataire</label>
+                            <select id="recipient_key" name="recipient_key" class="form-select">
+                                {% for key, recipient in recipients %}
+                                    <option value="{{ key }}" {{ key == selectedRecipientKey ? 'selected' : '' }}>
+                                        {{ recipient.label }}{% if recipient.phone %} — {{ recipient.phone }}{% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="field-text form-group">
+                            <label for="template_key" class="form-control-label">Modèle de message</label>
+                            <select id="template_key" name="template_key" class="form-select">
+                                <option value="customer_confirmed" {{ selectedTemplateKey == 'customer_confirmed' ? 'selected' : '' }}>Client — commande validée</option>
+                                <option value="customer_preparing" {{ selectedTemplateKey == 'customer_preparing' ? 'selected' : '' }}>Client — en préparation</option>
+                                <option value="customer_ready" {{ selectedTemplateKey == 'customer_ready' ? 'selected' : '' }}>Client — prête / livraison</option>
+                                <option value="customer_picked_up" {{ selectedTemplateKey == 'customer_picked_up' ? 'selected' : '' }}>Client — prise en charge</option>
+                                <option value="customer_out_for_delivery" {{ selectedTemplateKey == 'customer_out_for_delivery' ? 'selected' : '' }}>Client — en cours de livraison</option>
+                                <option value="customer_delivered" {{ selectedTemplateKey == 'customer_delivered' ? 'selected' : '' }}>Client — livrée</option>
+                                <option value="seller_availability" {{ selectedTemplateKey == 'seller_availability' ? 'selected' : '' }}>Vendeur — confirmer disponibilité</option>
+                                <option value="seller_prepare" {{ selectedTemplateKey == 'seller_prepare' ? 'selected' : '' }}>Vendeur — préparer commande</option>
+                                <option value="delivery_pickup" {{ selectedTemplateKey == 'delivery_pickup' ? 'selected' : '' }}>Livreur — récupérer commande</option>
+                                <option value="free" {{ selectedTemplateKey == 'free' ? 'selected' : '' }}>Message libre</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field-text form-group mt-3">
+                    <label for="phone" class="form-control-label">Numéro de téléphone</label>
+                    <input id="phone" name="phone" type="text" class="form-control" value="{{ phone }}" placeholder="Ex : +262...">
+                    <small class="form-text text-muted">Le numéro peut être corrigé manuellement avant l’envoi.</small>
+                </div>
+
+                <div class="field-textarea form-group mt-3">
+                    <label for="message" class="form-control-label">Message SMS</label>
+                    <textarea id="message" name="message" rows="7" class="form-control">{{ message }}</textarea>
+                    <small class="form-text text-muted">Le texte reste éditable pour tester les vrais messages terrain avant automatisation.</small>
+                </div>
+
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary" id="send_sms_and_open_app">Envoyer le SMS</button>
+                    <a href="{{ urls.detail }}" class="btn btn-link">Annuler</a>
+                    <small class="form-text text-muted d-block mt-2">Sur iPhone, ce bouton ouvre Messages via un lien <code>sms:</code>. Si l’ouverture échoue, le formulaire reste utilisable en envoi classique.</small>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const form = document.querySelector('form[data-sms-templates]');
+            if (!form) {
+                return;
+            }
+
+            const templates = JSON.parse(form.dataset.smsTemplates || '{}');
+            const recipients = JSON.parse(form.dataset.smsRecipients || '{}');
+            const templateSelect = document.getElementById('template_key');
+            const recipientSelect = document.getElementById('recipient_key');
+            const phoneInput = document.getElementById('phone');
+            const messageInput = document.getElementById('message');
+
+            function normalizePhone(phone) {
+                return (phone || '').trim().replace(/[^+0-9]/g, '');
+            }
+
+            function buildSmsUrl(phone, message) {
+                const normalizedPhone = normalizePhone(phone);
+                const normalizedMessage = (message || '').trim();
+
+                if (!normalizedPhone || !normalizedMessage) {
+                    return '';
+                }
+
+                return 'sms:' + normalizedPhone + '&body=' + encodeURIComponent(normalizedMessage);
+            }
+
+            function journalizeInBackground() {
+                const formData = new FormData(form);
+                const action = form.getAttribute('action') || window.location.href;
+
+                formData.append('_opened_with_sms_app', '1');
+
+                if (navigator.sendBeacon) {
+                    const body = new URLSearchParams(formData);
+                    const blob = new Blob([body.toString()], {
+                        type: 'application/x-www-form-urlencoded;charset=UTF-8'
+                    });
+
+                    return navigator.sendBeacon(action, blob);
+                }
+
+                fetch(action, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    keepalive: true
+                }).catch(function () {
+                    // Le bouton garde le comportement prioritaire : ouvrir l'app Messages.
+                    // Si la journalisation arrière-plan échoue, l'admin peut relancer depuis le backoffice.
+                });
+
+                return true;
+            }
+
+            templateSelect?.addEventListener('change', function () {
+                if (Object.prototype.hasOwnProperty.call(templates, this.value)) {
+                    messageInput.value = templates[this.value];
+                }
+            });
+
+            recipientSelect?.addEventListener('change', function () {
+                if (Object.prototype.hasOwnProperty.call(recipients, this.value)) {
+                    phoneInput.value = recipients[this.value].phone || '';
+                }
+            });
+
+            form.addEventListener('submit', function (event) {
+                const smsUrl = buildSmsUrl(phoneInput?.value || '', messageInput?.value || '');
+
+                if (!smsUrl) {
+                    return;
+                }
+
+                event.preventDefault();
+                journalizeInBackground();
+                window.location.href = smsUrl;
+            });
+        })();
+    </script>
+{% endblock %}

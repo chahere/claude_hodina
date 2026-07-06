@@ -1,0 +1,31 @@
+--- /mnt/data/orig_script/tools/deploy-hodina-by-tag.sh	2026-06-19 09:59:15.414131971 +0000
++++ tools/deploy-hodina-by-tag.sh	2026-06-19 09:58:41.375493282 +0000
+@@ -42,6 +42,7 @@
+ #   ENFORCE_SSH=0       Ne force pas origin en SSH. Déconseillé.
+ #   PHP_BIN=/path/php   Surcharge le binaire PHP.
+ #   MYSQLDUMP_BIN=/path/mariadb-dump  Surcharge le binaire dump DB. Auto-détecté sinon.
++#   PUBLIC_URL=https://...  Test HTTP optionnel de l'URL publique dans le résumé final.
+ #
+ # Règles Hodina :
+ #   - recette et production déploient un tag ;
+@@ -98,6 +99,7 @@
+   DRY_RUN=1           Simulation partielle : pas de checkout, pas de SQL, pas de crontab.
+   ENFORCE_SSH=0       Ne force pas origin en SSH.
+   MYSQLDUMP_BIN=/path/mariadb-dump  Surcharge le binaire dump DB. Auto-détecté sinon.
++  PUBLIC_URL=https://...  Test HTTP optionnel de l'URL publique dans le résumé final.
+ EOF
+ }
+ 
+@@ -888,8 +890,10 @@
+   local checks=(
+     "address:gps_latitude"
+     "address:gps_longitude"
+-    "customer_order:delivery_gps_latitude"
+-    "customer_order:delivery_gps_longitude"
++    "address:gps_accuracy_meters"
++    "customer_order:delivery_address_gps_latitude"
++    "customer_order:delivery_address_gps_longitude"
++    "customer_order:delivery_address_gps_accuracy_meters"
+   )
+ 
+   local item

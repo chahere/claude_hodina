@@ -1,0 +1,256 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ product.name }} – Hodina{% endblock %}
+
+{% block body %}
+{% set salesOpening = hodina_commerce_state() %}
+<section class="product-show">
+  <div class="container">
+
+    <nav class="breadcrumb">
+      <a href="{{ path('app_home') }}">Accueil</a>
+      <span class="sep">›</span>
+      <a href="{{ path('product_catalogue') }}">Catalogue</a>
+      <span class="sep">›</span>
+      <span class="current">{{ product.name }}</span>
+    </nav>
+
+    {% set images = (product.images is defined) ? product.images : [] %}
+    {% set mainImg = null %}
+    {% if images|length > 0 %}
+      {% set mainImg = images|first %}
+    {% endif %}
+
+    <div class="p-grid">
+      <div class="p-gallery">
+        <div class="p-main">
+          {% if mainImg %}
+            <img src="{{ asset('uploads/products/' ~ mainImg.path) }}" alt="{{ product.name }}" loading="lazy">
+          {% else %}
+            <div class="p-placeholder" aria-hidden="true">🛍️</div>
+          {% endif %}
+        </div>
+
+        {% if images|length > 1 %}
+          <div class="p-thumbs">
+            {% for img in images %}
+              <img class="p-thumb"
+                   src="{{ asset('uploads/products/' ~ img.path) }}"
+                   alt="{{ product.name }}"
+                   loading="lazy">
+            {% endfor %}
+          </div>
+          <p class="p-hint">Astuce : clique sur une vignette (fonction JS optionnelle si tu veux).</p>
+        {% endif %}
+      </div>
+
+      <div class="p-info">
+        <h1 class="p-title">{{ product.name }}</h1>
+
+        <div class="p-meta">
+          <div class="p-meta-line">
+            <span class="label">Vendu par</span>
+            <span class="value">{{ product.seller.publicDisplayName }}</span>
+          </div>
+          <div class="p-meta-line">
+            <span class="label">Catégorie</span>
+            <span class="value">{{ product.category.name }}</span>
+          </div>
+          <div class="p-meta-line">
+            <span class="label">Unité de vente</span>
+            <span class="value">{{ product.unitLabel }}</span>
+          </div>
+        </div>
+
+        <div class="p-pricebox">
+          <div class="p-price">
+            {{ (price ?? product.price)|number_format(2, ',', ' ') }} <span class="cur">€</span>
+            <span class="p-price-unit">{{ product.unitLabel|lower }}</span>
+          </div>
+
+          <div class="p-badges">
+            {% if product.isActive %}
+              <span class="badge badge-ok">Disponible</span>
+            {% else %}
+              <span class="badge badge-off">Indisponible</span>
+            {% endif %}
+
+            {% if product.isPreorder %}
+              <span class="badge badge-pre">Précommande</span>
+            {% endif %}
+          </div>
+
+          <div class="p-stock">
+            {% if product.isUnlimitedStock %}
+              <span class="muted">Stock : illimité</span>
+            {% else %}
+              <span class="muted">Stock : {{ product.stockQty }}</span>
+            {% endif %}
+          </div>
+
+          {# ✅ Form POST vers cart_add #}
+          <form method="post" action="{{ path('cart_add', {id: product.id}) }}" data-ajax-cart-form>
+            <div class="p-actions">
+              <div>
+                <div class="muted small" style="font-weight:800; margin-bottom:.35rem;">Quantité</div>
+
+                <div class="qty-stepper" data-stepper>
+                  <button type="button" data-minus aria-label="Diminuer">−</button>
+                  <input
+                    type="text"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    value="1"
+                    aria-label="Quantité"
+                    data-qty
+                  >
+                  <button type="button" data-plus aria-label="Augmenter">+</button>
+                </div>
+
+                <input type="hidden" name="qty" value="1" data-qty-hidden>
+              </div>
+
+              <button class="btn btn-primary" type="submit" {% if not product.isActive or salesOpening.isCartLocked %}disabled{% endif %}>
+                {{ salesOpening.isCartLocked ? 'Commandes suspendues' : 'Ajouter au panier' }}
+              </button>
+            </div>
+          </form>
+
+          <p class="p-note">
+            {% if salesOpening.isCartLocked %}
+              {{ salesOpening.cartLockedMessage }}
+            {% else %}
+              Paiement <strong>manuel</strong> pendant le pilote. La commande sera validée par un admin avant livraison.
+            {% endif %}
+          </p>
+        </div>
+
+        {% set deliveryPromise = productDeliveryPromise|default(null) %}
+        {% if deliveryPromise %}
+          <div class="p-delivery product-delivery-promise product-delivery-promise--{{ deliveryPromise.mode|lower|replace({'_': '-'}) }}">
+            <h2>Livraison</h2>
+
+            <div class="product-promise-header">
+              <span class="product-promise-badge">{{ deliveryPromise.badgeLabel }}</span>
+              <h3>{{ deliveryPromise.title }}</h3>
+              <p>{{ deliveryPromise.summary }}</p>
+              {% if deliveryPromise.description %}
+                <p class="muted">{{ deliveryPromise.description }}</p>
+              {% endif %}
+            </div>
+
+            {% if deliveryPromise.isAppointment and deliveryPromise.appointment %}
+              <div class="product-promise-appointment">
+                <div class="promise-row">
+                  <span>Jours possibles</span>
+                  <strong>{{ deliveryPromise.appointment.weekdayLabel }}</strong>
+                </div>
+                <div class="promise-row">
+                  <span>Plage souhaitée</span>
+                  <strong>{{ deliveryPromise.appointment.timeWindowLabel }}</strong>
+                </div>
+                <div class="promise-row">
+                  <span>Commande</span>
+                  <strong>{{ deliveryPromise.appointment.cutoffLabel }}</strong>
+                </div>
+                {% if deliveryPromise.appointment.leadTimeLabel %}
+                  <div class="promise-row">
+                    <span>Délai produit</span>
+                    <strong>{{ deliveryPromise.appointment.leadTimeLabel }}</strong>
+                  </div>
+                {% endif %}
+              </div>
+              <p class="muted small">Indique l’heure souhaitée dans le panier. Hodina te confirme ensuite le créneau réellement possible.</p>
+            {% elseif deliveryPromise.selectedSchedule %}
+              {% set schedule = deliveryPromise.selectedSchedule %}
+              <article class="delivery-sector-card delivery-sector-card--selected">
+                <strong>{{ schedule.publicLabel }}</strong>
+                <span>{{ schedule.weekdayLabels|join(', ') }}</span>
+                {% if schedule.nextDeliveryDateLabel %}
+                  <small>Prochain passage possible : {{ schedule.nextDeliveryDateLabel }}</small>
+                {% endif %}
+                {% if schedule.cutoffLabel %}
+                  <small>{{ schedule.cutoffLabel|capitalize }}</small>
+                {% endif %}
+              </article>
+            {% elseif deliveryPromise.showSectorSchedules and deliveryPromise.sectorSchedules is not empty %}
+              <details class="delivery-sector-details">
+                <summary>Voir les jours de livraison par secteur</summary>
+                <div class="delivery-sector-list" aria-label="Jours de passage par secteur">
+                  {% for schedule in deliveryPromise.sectorSchedules %}
+                    <article class="delivery-sector-card">
+                      <strong>{{ schedule.publicLabel }}</strong>
+                      <span>{{ schedule.weekdayLabels|join(', ') }}</span>
+                      {% if schedule.cutoffLabel %}
+                        <small>{{ schedule.cutoffLabel|capitalize }}</small>
+                      {% endif %}
+                    </article>
+                  {% endfor %}
+                </div>
+              </details>
+            {% endif %}
+
+            <p class="muted">{{ deliveryPromise.confirmationLabel }}</p>
+          </div>
+        {% endif %}
+
+        {% if product.description %}
+          <div class="p-desc">
+            <h2>Description</h2>
+            <p>{{ product.description|nl2br }}</p>
+          </div>
+        {% endif %}
+
+        <div class="p-back">
+          <a class="link" href="{{ path('product_catalogue') }}">← Retour au catalogue</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<script>
+  (function () {
+    // thumbs -> main image
+    const main = document.querySelector('.p-main img');
+    const thumbs = document.querySelectorAll('.p-thumb');
+    if (main && thumbs.length) {
+      thumbs.forEach(t => t.addEventListener('click', () => { main.src = t.src; }));
+    }
+
+    // stepper +/-
+    const stepper = document.querySelector('[data-stepper]');
+    if (!stepper) return;
+
+    const input = stepper.querySelector('[data-qty]');
+    const hidden = document.querySelector('[data-qty-hidden]');
+    const btnMinus = stepper.querySelector('[data-minus]');
+    const btnPlus = stepper.querySelector('[data-plus]');
+
+    const clamp = (n) => {
+      n = parseInt(n, 10);
+      if (Number.isNaN(n) || n < 1) n = 1;
+      if (n > 99) n = 99;
+      return n;
+    };
+
+    const sync = (n) => {
+      const v = clamp(n);
+      input.value = String(v);
+      hidden.value = String(v);
+    };
+
+    btnMinus.addEventListener('click', () => sync(clamp(input.value) - 1));
+    btnPlus.addEventListener('click', () => sync(clamp(input.value) + 1));
+
+    input.addEventListener('input', () => {
+      hidden.value = String(clamp(input.value));
+    });
+
+    input.addEventListener('blur', () => sync(input.value));
+
+    sync(1);
+  })();
+</script>
+{% endblock %}

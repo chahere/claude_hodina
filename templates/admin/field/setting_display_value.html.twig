@@ -1,0 +1,6 @@
+{% set value = field.value|default('') %}
+{% if value is empty %}
+    <span class="badge badge-secondary">Non renseigné</span>
+{% else %}
+    {{ value }}
+{% endif %}

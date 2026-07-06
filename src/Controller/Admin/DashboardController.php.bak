@@ -1,0 +1,116 @@
+<?php
+namespace App\Controller\Admin;
+use App\Entity\Category;
+use App\Entity\Customer;
+use App\Entity\CustomerOrder;
+use App\Entity\DeliveryZone;
+use App\Entity\Product;
+use App\Entity\Seller;
+use App\Controller\Admin\CustomerCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
+use Doctrine\ORM\EntityManagerInterface;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
+use EasyCorp\Bundle\EasyAdminBundle\Config\Dashboard;
+use EasyCorp\Bundle\EasyAdminBundle\Config\MenuItem;
+use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractDashboardController;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
+
+
+#[IsGranted('ROLE_ADMIN')]
+class DashboardController extends AbstractDashboardController
+{
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly AdminUrlGenerator $adminUrlGenerator,
+    ) {
+    }
+	
+	public function configureAssets(): Assets
+	{
+		return Assets::new()
+			->addJsFile('js/easyadmin-stock.js')
+			->addAssetMapperEntry('admin');
+	}
+	
+
+    /**
+     * Entrée backoffice
+     * IMPORTANT : index() doit rester sans argument (signature parent)
+     */
+    #[Route('/ouegnewe', name: 'backoffice')]
+    public function index(): Response
+    {
+        // On redirige vers le vrai dashboard (page d’atterrissage admin)
+        return $this->redirectToRoute('backoffice_dashboard');
+    }
+
+    /**
+     * Dashboard admin (stats + commandes récentes)
+     */
+    #[Route('/ouegnewe/dashboard', name: 'backoffice_dashboard')]
+    public function dashboard(): Response
+    {
+        $sellerCount = $this->em->getRepository(Seller::class)->count([]);
+        $categoryCount = $this->em->getRepository(Category::class)->count([]);
+        $productCount = $this->em->getRepository(Product::class)->count([]);
+        $orderCount = $this->em->getRepository(CustomerOrder::class)->count([]);
+
+        // Commandes récentes (adapte le tri si ton champ n’est pas createdAt)
+        $recentOrders = $this->em->getRepository(CustomerOrder::class)->findBy(
+            [],
+            ['createdAt' => 'DESC'],
+            8
+        );
+
+        return $this->render('admin/dashboard.html.twig', [
+            'stats' => [
+                'sellers' => $sellerCount,
+                'categories' => $categoryCount,
+                'products' => $productCount,
+                'orders' => $orderCount,
+            ],
+            'recentOrders' => $recentOrders,
+        ]);
+    }
+
+    public function configureDashboard(): Dashboard
+    {
+        return Dashboard::new()
+            ->setTitle('Hodina — Backoffice');
+    }
+
+    public function configureCrud(): Crud
+    {
+        return Crud::new()
+            ->showEntityActionsInlined()
+            ->setDefaultSort(['id' => 'DESC']);
+    }
+
+    public function configureMenuItems(): iterable
+    {
+        // Le “Dashboard” doit pointer vers /ouegnewe/dashboard (pas DeliveryZone)
+        yield MenuItem::linkToRoute('Dashboard', 'fa fa-home', 'backoffice_dashboard');
+
+        yield MenuItem::section('Logistique');
+        yield MenuItem::linkToCrud('Zones de livraison', 'fa fa-map', DeliveryZone::class);
+
+        yield MenuItem::section('Catalogue');
+        yield MenuItem::linkToCrud('Vendeurs', 'fa fa-store', Seller::class);
+        yield MenuItem::linkToCrud('Catégories', 'fa fa-tags', Category::class);
+        yield MenuItem::linkToCrud('Produits', 'fa fa-box', Product::class);
+
+        yield MenuItem::section('Commandes');
+        yield MenuItem::linkToCrud('Commandes clients', 'fa fa-shopping-cart', CustomerOrder::class);
+		yield MenuItem::section('Utilisateurs');
+		yield MenuItem::linkToCrud('Utilisateurs', 'fa fa-users', Customer::class)
+				->setController(CustomerCrudController::class); 
+        yield MenuItem::section('Pilote');
+        yield MenuItem::linkToCrud('Adhésions clients', 'fas fa-user-check', CustomerSignup::class);
+        yield MenuItem::linkToCrud('SMS (logs)', 'fas fa-comment', SmsLog::class);
+	
+	}
+	
+}

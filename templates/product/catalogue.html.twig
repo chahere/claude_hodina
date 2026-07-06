@@ -1,0 +1,139 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Catalogue – Hodina{% endblock %}
+
+{% block body %}
+<section class="catalogue" data-catalogue-page>
+    <div class="container">
+        <h1 class="catalogue-accessible-title">Catalogue Hodina</h1>
+
+        <div class="catalogue-market-intro" aria-label="Présentation de Hodina">
+            <p class="catalogue-market-brand">Hodina</p>
+            <p class="catalogue-market-title">Le marché local en ligne de Mayotte.</p>
+            <p class="catalogue-market-text">Des produits locaux, des vendeurs du territoire et une livraison organisée selon les communes.</p>
+        </div>
+
+        {% include 'product/_catalogue_filters.html.twig' %}
+
+        <div data-catalogue-results aria-live="polite">
+            {% include 'product/_catalogue_results.html.twig' %}
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+(function () {
+  const root = document.querySelector('[data-catalogue-page]');
+  if (!root) return;
+
+  const form = root.querySelector('[data-catalogue-filter-form]');
+  const results = root.querySelector('[data-catalogue-results]');
+  const searchInput = form ? form.querySelector('[name="q"]') : null;
+  const selects = form ? Array.from(form.querySelectorAll('select')) : [];
+  const filterToggle = form ? form.querySelector('[data-catalogue-filter-toggle]') : null;
+  const filterPanel = form ? form.querySelector('[data-catalogue-filter-panel]') : null;
+  let abortController = null;
+  let debounceTimer = null;
+
+  const setFilterPanelState = (isOpen) => {
+    if (!filterToggle || !filterPanel) return;
+
+    filterPanel.hidden = !isOpen;
+    filterPanel.classList.toggle('is-open', isOpen);
+    filterToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  };
+
+  if (filterToggle && filterPanel) {
+    const openOnLoad = filterPanel.getAttribute('data-open-on-load') === 'true';
+    setFilterPanelState(openOnLoad);
+
+    filterToggle.addEventListener('click', () => {
+      setFilterPanelState(filterPanel.hidden);
+    });
+  }
+
+  if (!form || !results || !window.fetch || !window.history) return;
+
+  const buildUrl = (fragment) => {
+    const url = new URL(form.getAttribute('action') || window.location.href, window.location.origin);
+    const data = new FormData(form);
+
+    for (const [key, value] of data.entries()) {
+      const normalized = String(value || '').trim();
+      if (normalized === '') {
+        url.searchParams.delete(key);
+        continue;
+      }
+      url.searchParams.set(key, normalized);
+    }
+
+    if (fragment) {
+      url.searchParams.set('fragment', '1');
+    } else {
+      url.searchParams.delete('fragment');
+    }
+
+    return url;
+  };
+
+  const refreshCatalogue = async (pushState) => {
+    if (abortController) abortController.abort();
+    abortController = new AbortController();
+
+    const fragmentUrl = buildUrl(true);
+    const publicUrl = buildUrl(false);
+    results.setAttribute('aria-busy', 'true');
+    results.classList.add('is-loading');
+
+    try {
+      const response = await fetch(fragmentUrl.toString(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) throw new Error('Catalogue refresh failed');
+
+      results.innerHTML = await response.text();
+      if (pushState) {
+        window.history.pushState({}, '', publicUrl.toString());
+      }
+    } catch (error) {
+      if (!error || error.name !== 'AbortError') {
+        form.submit();
+      }
+    } finally {
+      results.removeAttribute('aria-busy');
+      results.classList.remove('is-loading');
+    }
+  };
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    refreshCatalogue(true);
+  });
+
+  selects.forEach((select) => {
+    select.addEventListener('change', () => refreshCatalogue(true));
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => refreshCatalogue(true), 350);
+    });
+  }
+
+  window.addEventListener('popstate', () => {
+    const params = new URLSearchParams(window.location.search);
+    if (searchInput) searchInput.value = params.get('q') || '';
+    selects.forEach((select) => {
+      select.value = params.get(select.name) || '';
+    });
+    refreshCatalogue(false);
+  });
+})();
+</script>
+{% endblock %}

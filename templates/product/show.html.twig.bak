@@ -1,0 +1,147 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ product.name }} – Hodina{% endblock %}
+
+{% block body %}
+<section class="product-show">
+  <div class="container">
+
+    {# Breadcrumb simple #}
+    <nav class="breadcrumb">
+      <a href="{{ path('app_home') }}">Accueil</a>
+      <span class="sep">›</span>
+      <a href="{{ path('product_catalogue') }}">Catalogue</a>
+      <span class="sep">›</span>
+      <span class="current">{{ product.name }}</span>
+    </nav>
+
+    {# Images: ProductImage.path = filename stocké dans /public/uploads/products/ #}
+    {% set images = (product.images is defined) ? product.images : [] %}
+    {% set mainImg = null %}
+    {% if images|length > 0 %}
+      {# par défaut : première image #}
+      {% set mainImg = images|first %}
+    {% endif %}
+
+    <div class="p-grid">
+      {# Colonne gauche : galerie #}
+      <div class="p-gallery">
+        <div class="p-main">
+          {% if mainImg %}
+            <img src="{{ asset('uploads/products/' ~ mainImg.path) }}" alt="{{ product.name }}" loading="lazy">
+          {% else %}
+            <div class="p-placeholder" aria-hidden="true">🛍️</div>
+          {% endif %}
+        </div>
+
+        {% if images|length > 1 %}
+          <div class="p-thumbs">
+            {% for img in images %}
+              <img
+                class="p-thumb"
+                src="{{ asset('uploads/products/' ~ img.path) }}"
+                alt="{{ product.name }}"
+                loading="lazy"
+              >
+            {% endfor %}
+          </div>
+          <p class="p-hint">Astuce : clique sur une vignette (fonction JS optionnelle si tu veux).</p>
+        {% endif %}
+      </div>
+
+      {# Colonne droite : infos produit #}
+      <div class="p-info">
+        <h1 class="p-title">{{ product.name }}</h1>
+
+        <div class="p-meta">
+          <div class="p-meta-line">
+            <span class="label">Vendu par</span>
+            <span class="value">{{ product.seller.name }}</span>
+          </div>
+          <div class="p-meta-line">
+            <span class="label">Catégorie</span>
+            <span class="value">{{ product.category.name }}</span>
+          </div>
+        </div>
+
+        <div class="p-pricebox">
+          <div class="p-price">
+            {{ product.price|number_format(2, ',', ' ') }} <span class="cur">€</span>
+          </div>
+
+          <div class="p-badges">
+            {% if product.isActive %}
+              <span class="badge badge-ok">Disponible</span>
+            {% else %}
+              <span class="badge badge-off">Indisponible</span>
+            {% endif %}
+
+            {% if product.isPreorder %}
+              <span class="badge badge-pre">Précommande</span>
+            {% endif %}
+          </div>
+
+          <div class="p-stock">
+            {% if product.isUnlimitedStock %}
+              <span class="muted">Stock : illimité</span>
+            {% else %}
+              <span class="muted">Stock : {{ product.stockQty }}</span>
+            {% endif %}
+          </div>
+
+          <div class="p-actions">
+            <div class="qty">
+              <label for="qty">Qté</label>
+              <input id="qty" type="number" min="1" value="1">
+            </div>
+
+            <button class="btn btn-primary" type="button" {% if not product.isActive %}disabled{% endif %}>
+              Ajouter au panier
+            </button>
+          </div>
+
+          <p class="p-note">
+            Paiement <strong>manuel</strong> pendant le pilote. La commande sera validée par un admin avant livraison.
+          </p>
+        </div>
+
+        <div class="p-delivery">
+          <h2>Livraison (pilote)</h2>
+          <ul>
+            <li><strong>Petit-Terre :</strong> livraison mardi (commandes avant vendredi 23h)</li>
+            <li><strong>Grande-Terre :</strong> livraison jeudi (commandes avant mardi 23h)</li>
+          </ul>
+          <p class="muted">La date finale est confirmée après validation admin + vérification vendeur.</p>
+        </div>
+
+        {% if product.description %}
+          <div class="p-desc">
+            <h2>Description</h2>
+            <p>{{ product.description|nl2br }}</p>
+          </div>
+        {% endif %}
+
+        <div class="p-back">
+          <a class="link" href="{{ path('product_catalogue') }}">← Retour au catalogue</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+{# Mini JS optionnel : clic vignette -> remplace image principale #}
+<script>
+  (function () {
+    const main = document.querySelector('.p-main img');
+    const thumbs = document.querySelectorAll('.p-thumb');
+    if (!main || !thumbs.length) return;
+
+    thumbs.forEach(t => {
+      t.addEventListener('click', () => {
+        main.src = t.src;
+      });
+    });
+  })();
+</script>
+{% endblock %}

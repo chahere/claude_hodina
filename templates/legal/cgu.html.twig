@@ -1,0 +1,117 @@
+{% extends 'legal/_legal_layout.html.twig' %}
+
+{% block title %}Conditions générales d’utilisation – Hodina{% endblock %}
+
+{% block legal_body %}
+    <div class="legal-kicker">Document légal client</div>
+    <h1>Conditions générales d’utilisation</h1>
+    <p class="legal-updated">Clients de la plateforme Hodina — Dernière mise à jour : {{ 'now'|date('d/m/Y') }}</p>
+
+    <div class="legal-warning">
+        Pendant la phase pilote, certaines fonctionnalités peuvent rester manuelles, notamment la validation des commandes, la confirmation des disponibilités, le paiement et l’envoi des SMS.
+    </div>
+
+    <nav class="legal-toc" aria-label="Sommaire CGU">
+        {% for i in 1..13 %}
+            <a href="#article-{{ i }}">Article {{ i }}</a>
+        {% endfor %}
+    </nav>
+
+    <section class="legal-section" id="article-1">
+        <h2>Article 1 – Objet</h2>
+        <p>Les présentes Conditions Générales d’Utilisation, ci-après les « CGU », ont pour objet de définir les modalités d’accès et d’utilisation de la plateforme Hodina par toute personne physique ou morale, ci-après le « Client ».</p>
+        <p>La plateforme Hodina permet aux Clients d’accéder à une marketplace mettant en relation des vendeurs locaux mahorais, producteurs, artisans ou commerçants, avec des acheteurs, et de commander des produits proposés par ces vendeurs.</p>
+    </section>
+
+    <section class="legal-section" id="article-2">
+        <h2>Article 2 – Présentation de Hodina</h2>
+        <p>Hodina est une plateforme de mise en relation commerciale.</p>
+        <p>Hodina n’est pas le vendeur des produits proposés sur la plateforme. Chaque produit est vendu directement par un vendeur tiers, sous sa propre responsabilité.</p>
+        <p>Hodina agit exclusivement en qualité d’intermédiaire technique et logistique, facilitant notamment :</p>
+        <ul>
+            <li>la mise en relation entre Clients et vendeurs locaux ;</li>
+            <li>la transmission et le suivi des commandes ;</li>
+            <li>l’organisation ou la coordination de la livraison lorsque cela est prévu ;</li>
+            <li>les échanges d’informations nécessaires au traitement de la commande.</li>
+        </ul>
+    </section>
+
+    <section class="legal-section" id="article-3">
+        <h2>Article 3 – Accès à la plateforme</h2>
+        <p>L’accès à la plateforme est libre. Certaines fonctionnalités, notamment la commande, le suivi ou l’historique, nécessitent la création d’un compte Client.</p>
+        <p>Le Client garantit fournir des informations exactes et à jour et être juridiquement capable de contracter.</p>
+        <p>Hodina se réserve le droit de refuser ou suspendre l’accès à tout compte en cas de non-respect des présentes CGU.</p>
+    </section>
+
+    <section class="legal-section" id="article-4">
+        <h2>Article 4 – Création et gestion du compte Client</h2>
+        <p>Lors de la création du compte, le Client choisit des identifiants personnels et confidentiels.</p>
+        <p>Le Client est seul responsable de la confidentialité de ses identifiants et de toute utilisation de son compte.</p>
+        <p>Toute utilisation frauduleuse doit être signalée sans délai à Hodina.</p>
+    </section>
+
+    <section class="legal-section" id="article-5">
+        <h2>Article 5 – Fonctionnement des commandes</h2>
+        <p>Le Client peut commander un ou plusieurs produits auprès d’un ou plusieurs vendeurs.</p>
+        <p>En cas de commande multi-vendeurs, les produits peuvent être préparés ou livrés séparément, et les délais peuvent différer selon les vendeurs.</p>
+        <p>Les conditions de vente, de livraison et de remboursement relèvent des Conditions Générales de Vente applicables.</p>
+    </section>
+
+    <section class="legal-section" id="article-6">
+        <h2>Article 6 – Rôle et responsabilité de Hodina</h2>
+        <p>Hodina n’intervient pas dans la fabrication des produits, n’est pas propriétaire des produits vendus et n’est pas responsable des obligations légales propres au vendeur.</p>
+        <p>Hodina assure la mise à disposition de la plateforme, la transmission des commandes et la coordination logistique lorsque cela est prévu.</p>
+        <p>La responsabilité de Hodina ne saurait être engagée en cas de défaut du produit, de retard imputable au vendeur, de cas de force majeure ou de mauvaise utilisation du produit par le Client.</p>
+    </section>
+
+    <section class="legal-section" id="article-7">
+        <h2>Article 7 – Obligations du Client</h2>
+        <p>Le Client s’engage à utiliser la plateforme de manière loyale, à ne pas porter atteinte aux vendeurs ou à Hodina, et à respecter les règles de paiement et de réception des commandes.</p>
+        <p>Toute fraude, tentative de contournement ou usage abusif pourra entraîner la suspension du compte.</p>
+    </section>
+
+    <section class="legal-section" id="article-8">
+        <h2>Article 8 – Disponibilité du service</h2>
+        <p>Hodina s’efforce d’assurer l’accès à la plateforme 24h/24 et 7j/7.</p>
+        <p>Toutefois, l’accès peut être temporairement suspendu pour maintenance, mise à jour ou incident technique, sans droit à indemnisation.</p>
+    </section>
+
+    <section class="legal-section" id="article-9">
+        <h2>Article 9 – Données personnelles</h2>
+        <p>Hodina collecte et traite les données personnelles du Client conformément à la réglementation en vigueur.</p>
+        <p>Les modalités de traitement seront détaillées dans la politique de protection des données accessible sur la plateforme.</p>
+    </section>
+
+    <section class="legal-section" id="article-10">
+        <h2>Article 10 – Propriété intellectuelle</h2>
+        <p>L’ensemble des éléments de la plateforme, notamment les textes, visuels, logos et la structure du site, est protégé par le droit de la propriété intellectuelle.</p>
+        <p>Toute reproduction ou utilisation non autorisée est strictement interdite.</p>
+    </section>
+
+    <section class="legal-section" id="article-11">
+        <h2>Article 11 – Modification des CGU</h2>
+        <p>Hodina se réserve le droit de modifier les présentes CGU à tout moment.</p>
+        <p>Les CGU applicables sont celles en vigueur à la date d’utilisation de la plateforme par le Client.</p>
+    </section>
+
+    <section class="legal-section" id="article-12">
+        <h2>Article 12 – Droit applicable et litiges</h2>
+        <p>Les présentes CGU sont soumises au droit français.</p>
+        <p>En cas de litige, une solution amiable sera recherchée en priorité. À défaut, les tribunaux compétents seront ceux du ressort du siège social de Hodina.</p>
+    </section>
+
+    <section class="legal-section" id="article-13">
+        <h2>Article 13 – Contact</h2>
+        <p>Pour toute question ou réclamation : contact@hodina.fr</p>
+    </section>
+
+    <section class="legal-section">
+        <h2>Acceptation</h2>
+        <p>L’utilisation de la plateforme Hodina implique l’acceptation pleine et entière des présentes Conditions Générales d’Utilisation.</p>
+    </section>
+
+    <div class="legal-actions">
+        <a class="btn btn-primary" href="{{ path('product_catalogue') }}">Retour au catalogue</a>
+        <a class="btn btn-secondary" href="{{ path('app_cgv') }}">Voir les CGV</a>
+    </div>
+{% endblock %}

@@ -1,0 +1,227 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}Tableau de bord{% endblock %}
+
+{% block main %}
+    <style>
+        .hodina-dashboard {
+            --hodina-green: #16865f;
+            --hodina-border: rgba(148, 163, 184, .28);
+            --hodina-muted: #8f9aa7;
+        }
+
+        .hodina-dashboard .hero-card,
+        .hodina-dashboard .metric-card,
+        .hodina-dashboard .panel-card {
+            border: 1px solid var(--hodina-border);
+            border-radius: 22px;
+            background: var(--body-bg, #fff);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+        }
+
+        .hodina-dashboard .hero-card {
+            padding: 1.4rem;
+        }
+
+        .hodina-dashboard .metric-card {
+            padding: 1.15rem;
+            height: 100%;
+        }
+
+        .hodina-dashboard .metric-label,
+        .hodina-dashboard .small-muted {
+            color: var(--hodina-muted);
+        }
+
+        .hodina-dashboard .metric-value {
+            font-size: clamp(1.8rem, 7vw, 2.8rem);
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -.04em;
+        }
+
+        .hodina-dashboard .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .75rem;
+        }
+
+        .hodina-dashboard .quick-actions .btn {
+            border-radius: 14px;
+            padding: .8rem 1rem;
+            font-weight: 700;
+        }
+
+        .hodina-dashboard .status-pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: .35rem .65rem;
+            font-size: .84rem;
+            font-weight: 800;
+            background: rgba(22, 134, 95, .12);
+            color: #17865f;
+            white-space: nowrap;
+        }
+
+        .hodina-dashboard .order-card {
+            border: 1px solid var(--hodina-border);
+            border-radius: 18px;
+            padding: 1rem;
+            margin-bottom: .85rem;
+        }
+
+        .hodina-dashboard .order-ref {
+            font-size: 1.05rem;
+            font-weight: 800;
+            word-break: break-word;
+        }
+
+        .hodina-dashboard .order-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            margin-top: .8rem;
+        }
+
+        .hodina-dashboard .order-actions .btn {
+            border-radius: 12px;
+            font-weight: 700;
+        }
+
+        @media (min-width: 992px) {
+            .hodina-dashboard .hero-card {
+                padding: 1.8rem;
+            }
+
+            .hodina-dashboard .quick-actions {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+    </style>
+
+    <div class="hodina-dashboard container-fluid px-0 px-md-2">
+        <section class="hero-card mb-4">
+            <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+                <div>
+                    <div class="small-muted fw-bold text-uppercase mb-2">Pilotage Hodina</div>
+                    <h1 class="h2 fw-bold mb-2">Tableau de bord opérationnel</h1>
+                    <p class="small-muted mb-0">
+                        Suivi rapide des commandes, du catalogue et des réglages importants du portail.
+                    </p>
+                </div>
+
+                <div class="quick-actions align-self-stretch align-self-lg-center">
+                    <a class="btn btn-primary" href="{{ urls.orders }}">Voir les commandes</a>
+                    <a class="btn btn-secondary" href="{{ urls.products }}">Gérer les produits</a>
+                    <a class="btn btn-secondary" href="{{ urls.sellers }}">Gérer les vendeurs</a>
+                    <a class="btn btn-secondary" href="{{ urls.settings }}">Réglages</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+                <div class="metric-card">
+                    <div class="metric-label fw-bold">Commandes</div>
+                    <div class="metric-value mt-2">{{ stats.orders }}</div>
+                    <div class="small-muted mt-2">Total depuis le début</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="metric-card">
+                    <div class="metric-label fw-bold">À valider</div>
+                    <div class="metric-value mt-2">{{ stats.pendingOrders }}</div>
+                    <div class="small-muted mt-2">En validation admin</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="metric-card">
+                    <div class="metric-label fw-bold">En cours</div>
+                    <div class="metric-value mt-2">{{ stats.activeOrders }}</div>
+                    <div class="small-muted mt-2">Confirmées, préparation ou prêtes</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="metric-card">
+                    <div class="metric-label fw-bold">Livrées</div>
+                    <div class="metric-value mt-2">{{ stats.deliveredOrders }}</div>
+                    <div class="small-muted mt-2">Commandes terminées</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+                <div class="metric-card">
+                    <div class="metric-label fw-bold">Vendeurs</div>
+                    <div class="metric-value mt-2">{{ stats.sellers }}</div>
+                    <div class="small-muted mt-2">Partenaires catalogue</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="metric-card">
+                    <div class="metric-label fw-bold">Catégories</div>
+                    <div class="metric-value mt-2">{{ stats.categories }}</div>
+                    <div class="small-muted mt-2">Familles de produits</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="metric-card">
+                    <div class="metric-label fw-bold">Produits</div>
+                    <div class="metric-value mt-2">{{ stats.products }}</div>
+                    <div class="small-muted mt-2">Produits publiés ou préparés</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="metric-card">
+                    <div class="metric-label fw-bold">Volume brut</div>
+                    <div class="metric-value mt-2">{{ stats.gmv|number_format(0, ',', ' ') }} €</div>
+                    <div class="small-muted mt-2">Hors commandes annulées</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel-card p-3 p-lg-4">
+            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2 mb-3">
+                <div>
+                    <h2 class="h4 fw-bold mb-1">Commandes récentes</h2>
+                    <div class="small-muted">Les dernières commandes créées sur le portail client.</div>
+                </div>
+                <a class="btn btn-primary" href="{{ urls.orders }}">Voir toutes</a>
+            </div>
+
+            {% if recentOrders is empty %}
+                <div class="text-muted">Aucune commande pour le moment.</div>
+            {% else %}
+                {% for order in recentOrders %}
+                    {% set orderId = order.id %}
+                    <article class="order-card">
+                        <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
+                            <div>
+                                <div class="order-ref">{{ order.orderReference ?: 'Commande #' ~ order.id }}</div>
+                                <div class="small-muted mt-1">
+                                    Créée le {{ order.createdAt ? order.createdAt|date('d/m/Y à H:i', order.displayTimezone) : '-' }}
+                                </div>
+                            </div>
+                            <div class="text-md-end">
+                                {% set recentStatusLabel = statusLabels[order.status] ?? order.status %}
+                                {% if order.status == constant('App\\Entity\\CustomerOrder::STATUS_PICKED_UP') and order.assignedCourier %}
+                                    {% set courierName = (order.assignedCourier.firstName ~ ' ' ~ (order.assignedCourier.lastName ?: ''))|trim %}
+                                    {% set recentStatusLabel = 'Prise en charge par ' ~ (courierName ?: order.assignedCourier.email ?: 'livreur') %}
+                                {% endif %}
+                                <span class="status-pill">{{ recentStatusLabel }}</span>
+                                <div class="fw-bold mt-2">{{ order.total|number_format(2, ',', ' ') }} €</div>
+                            </div>
+                        </div>
+
+                        <div class="order-actions">
+                            <a class="btn btn-sm btn-primary" href="{{ orderUrls[orderId].operationalSheet }}">Fiche terrain</a>
+                            <a class="btn btn-sm btn-secondary" href="{{ orderUrls[orderId].detail }}">Voir le détail</a>
+                        </div>
+                    </article>
+                {% endfor %}
+            {% endif %}
+        </section>
+    </div>
+{% endblock %}

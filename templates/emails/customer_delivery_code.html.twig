@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Code réception Hodina</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #24170f; line-height: 1.5;">
+    <p>{{ emailBranding.opening|default('Bonjour,') }}</p>
+
+    <p>Votre commande Hodina <strong>{{ orderReference }}</strong> est en cours de livraison.</p>
+
+    <p style="font-size: 1.25rem; font-weight: 700;">Code réception : {{ code }}</p>
+
+    <p>Donnez ce code au livreur uniquement lorsque la commande est bien remise.</p>
+    <p>Ce code permet à Hodina de confirmer la réception de votre commande.</p>
+
+    <p style="color:#7a5f47;font-size:13px;">{{ noReplyNotice|default('Merci de ne pas répondre directement à cet e-mail.') }}</p>
+
+    <p>{{ emailBranding.closing|default('Merci,') }}<br>{{ emailBranding.signature|default('L’équipe Hodina') }}</p>
+</body>
+</html>

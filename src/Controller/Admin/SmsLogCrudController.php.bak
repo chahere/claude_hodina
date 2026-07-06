@@ -1,0 +1,29 @@
+<?php
+
+namespace App\Controller\Admin;
+
+use App\Entity\SmsLog;
+use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
+use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
+
+final class SmsLogCrudController extends AbstractCrudController
+{
+    public static function getEntityFqcn(): string
+    {
+        return SmsLog::class;
+    }
+
+    public function configureFields(string $pageName): iterable
+    {
+        return [
+            IdField::new('id')->onlyOnIndex(),
+            DateTimeField::new('createdAt', 'Créé'),
+            TextField::new('context', 'Contexte'),
+            TextField::new('phone', 'Téléphone'),
+            TextareaField::new('message', 'Message')->hideOnIndex(),
+        ];
+    }
+}

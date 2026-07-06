@@ -1,0 +1,1 @@
+Patch J5K-v8 : ajoute customer.delivery_address_id, routes panier pour définir les adresses par défaut, affichage séparé livraison/facturation et documentation de suivi.

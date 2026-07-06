@@ -1,0 +1,66 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mes informations – Hodina{% endblock %}
+
+{% block body %}
+<section class="section account-page" data-client-account-page>
+  <div class="container account-container">
+    <div class="account-header">
+      <p class="account-kicker">Mon compte</p>
+      <h1>Mes informations</h1>
+      <p class="muted">Mets à jour tes coordonnées de compte. Les adresses de livraison restent gérées au panier pour éviter les erreurs de livraison.</p>
+    </div>
+
+    {% include 'client/_account_nav.html.twig' %}
+
+    <article class="account-card account-form-card">
+      {{ form_start(profileForm, {'attr': {'class': 'account-form', 'data-client-account-form': 'profile'}}) }}
+        <div class="account-form-grid">
+          <div class="account-field">
+            {{ form_label(profileForm.firstName, null, {'label_attr': {'class': 'account-form-label'}}) }}
+            {{ form_widget(profileForm.firstName, {'attr': {'class': 'account-input'}}) }}
+            <div class="account-form-error">{{ form_errors(profileForm.firstName) }}</div>
+          </div>
+
+          <div class="account-field">
+            {{ form_label(profileForm.lastName, null, {'label_attr': {'class': 'account-form-label'}}) }}
+            {{ form_widget(profileForm.lastName, {'attr': {'class': 'account-input'}}) }}
+            <div class="account-form-error">{{ form_errors(profileForm.lastName) }}</div>
+          </div>
+        </div>
+
+        <div class="account-field">
+          {{ form_label(profileForm.email, null, {'label_attr': {'class': 'account-form-label'}}) }}
+          {{ form_widget(profileForm.email, {'attr': {'class': 'account-input'}}) }}
+          <div class="account-form-error">{{ form_errors(profileForm.email) }}</div>
+        </div>
+
+        <div class="account-phone-grid">
+          <div class="account-field">
+            {{ form_label(profileForm.phoneCountryCode, null, {'label_attr': {'class': 'account-form-label'}}) }}
+            {{ form_widget(profileForm.phoneCountryCode, {'attr': {'class': 'account-select'}}) }}
+            <div class="account-form-error">{{ form_errors(profileForm.phoneCountryCode) }}</div>
+          </div>
+
+          <div class="account-field">
+            {{ form_label(profileForm.phone, null, {'label_attr': {'class': 'account-form-label'}}) }}
+            {{ form_widget(profileForm.phone, {'attr': {'class': 'account-input'}}) }}
+            {% if profileForm.phone.vars.help %}<p class="muted small account-help">{{ profileForm.phone.vars.help }}</p>{% endif %}
+            <div class="account-form-error">{{ form_errors(profileForm.phone) }}</div>
+          </div>
+        </div>
+
+        <div class="account-form-actions">
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+          <a href="{{ path('client_account_index') }}" class="btn btn-secondary">Annuler</a>
+        </div>
+      {{ form_end(profileForm) }}
+    </article>
+  </div>
+</section>
+{% endblock %}
+
+{% block javascripts %}
+  {{ parent() }}
+  {% include 'client/_account_ajax.html.twig' %}
+{% endblock %}

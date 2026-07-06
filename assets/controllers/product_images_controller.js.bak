@@ -1,0 +1,151 @@
+import { Controller } from '@hotwired/stimulus';
+
+export default class extends Controller {
+  static values = {
+    basePath: String, // ex: /uploads/products/
+  };
+
+  connect() {
+    this._objectUrls = new Map();
+
+    // init (EDIT) + si des items existent déjà
+    this.refreshAll();
+
+    // change sur n'importe quel input file dans la collection
+    this._onChange = (e) => {
+      const input = e.target;
+      if (input && input.matches('input[type="file"]')) {
+        this.updateOne(input);
+      }
+    };
+    this.element.addEventListener('change', this._onChange);
+
+    // quand on clique "Add a new item", EA injecte du HTML => on refresh
+    this._observer = new MutationObserver(() => this.refreshAll());
+    this._observer.observe(this.element, { childList: true, subtree: true });
+  }
+
+  disconnect() {
+    if (this._observer) this._observer.disconnect();
+    if (this._onChange) this.element.removeEventListener('change', this._onChange);
+
+    for (const url of this._objectUrls.values()) {
+      try { URL.revokeObjectURL(url); } catch (e) {}
+    }
+    this._objectUrls.clear();
+  }
+
+  refreshAll() {
+    const fileInputs = this.element.querySelectorAll('input[type="file"]');
+    fileInputs.forEach((input) => this.updateOne(input));
+  }
+
+  updateOne(input) {
+    const ui = this.ensureUi(input);
+
+    // 1) NEW/EDIT : fichier sélectionné => preview immédiat + nom
+    const file = input.files && input.files[0];
+    if (file) {
+      ui.name.textContent = file.name;
+
+      const oldUrl = this._objectUrls.get(input);
+      if (oldUrl) {
+        try { URL.revokeObjectURL(oldUrl); } catch (e) {}
+      }
+
+      const url = URL.createObjectURL(file);
+      this._objectUrls.set(input, url);
+
+      ui.img.src = url;
+      ui.img.style.display = '';
+      return;
+    }
+
+    // 2) EDIT : récupérer le nom du fichier existant (chez toi il est dans placeholder/label)
+    const storedFilename = this.findStoredFilename(input);
+    if (storedFilename) {
+      ui.name.textContent = storedFilename;
+
+      const base = (this.basePathValue || '/uploads/products/').replace(/\/?$/, '/');
+      ui.img.src = base + storedFilename;
+      ui.img.style.display = '';
+      return;
+    }
+
+    // 3) Rien
+    ui.name.textContent = '';
+    ui.img.removeAttribute('src');
+    ui.img.style.display = 'none';
+  }
+
+  ensureUi(input) {
+    // input est "d-none" dans EA, donc on accroche l'UI au bloc ea-fileupload si possible
+    const eaFileUpload = input.closest('.ea-fileupload');
+    const container =
+      eaFileUpload ||
+      input.closest('.field-image, .ea-field, .form-group, .form-widget, .ea-form-field') ||
+      input.parentElement;
+
+    let wrapper = container.querySelector('.hodina-image-ui');
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.className = 'hodina-image-ui';
+      wrapper.style.marginTop = '10px';
+
+      const img = document.createElement('img');
+      img.style.maxWidth = '160px';
+      img.style.maxHeight = '160px';
+      img.style.objectFit = 'cover';
+      img.style.borderRadius = '10px';
+      img.style.display = 'none';
+      img.style.border = '1px solid rgba(0,0,0,0.12)';
+
+      const name = document.createElement('div');
+      name.className = 'text-muted small';
+      name.style.marginTop = '6px';
+      name.style.wordBreak = 'break-all';
+
+      wrapper.appendChild(img);
+      wrapper.appendChild(name);
+
+      container.appendChild(wrapper);
+    }
+
+    return {
+      img: wrapper.querySelector('img'),
+      name: wrapper.querySelector('div'),
+    };
+  }
+
+  findStoredFilename(input) {
+    // A) certains setups mettent un hidden [path]
+    const container =
+      input.closest('.field-image, .ea-field, .form-group, .form-widget, .ea-form-field') ||
+      input.parentElement;
+
+    if (container) {
+      const hidden = container.querySelector('input[type="hidden"][name$="[path]"]');
+      const hiddenVal = hidden && hidden.value ? hidden.value.trim() : '';
+      if (hiddenVal) return hiddenVal;
+
+      // B) ton HTML montre : placeholder="2026....jpg"
+      const ph = (input.getAttribute('placeholder') || '').trim();
+      if (ph && ph.toLowerCase() !== 'choose file') return ph;
+
+      // C) le label EA affiche aussi le filename
+      const id = input.getAttribute('id');
+      if (id) {
+        const label = container.querySelector(`label[for="${CSS.escape(id)}"]`);
+        const labelTxt = label ? label.textContent.trim() : '';
+        if (labelTxt && labelTxt.toLowerCase() !== 'choose file') return labelTxt;
+      }
+
+      // D) fallback : custom-file-label dans le même bloc
+      const anyLabel = container.querySelector('.custom-file-label');
+      const anyLabelTxt = anyLabel ? anyLabel.textContent.trim() : '';
+      if (anyLabelTxt && anyLabelTxt.toLowerCase() !== 'choose file') return anyLabelTxt;
+    }
+
+    return null;
+  }
+}

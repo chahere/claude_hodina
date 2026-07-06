@@ -1,0 +1,397 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}
+    Fiche terrain — {{ order.orderReference ?: 'Commande #' ~ order.id }}
+{% endblock %}
+
+{% block main %}
+    {% set status = order.status %}
+    {% set customer = order.customer %}
+    {% set statusLabel = statusLabels[order.status]|default(order.status) %}
+    {% if status == constant('App\\Entity\\CustomerOrder::STATUS_PICKED_UP') and order.assignedCourier %}
+        {% set courierName = (order.assignedCourier.firstName ~ ' ' ~ (order.assignedCourier.lastName ?: ''))|trim %}
+        {% set statusLabel = 'Prise en charge par ' ~ (courierName ?: order.assignedCourier.email ?: 'livreur') %}
+    {% endif %}
+    {% set paymentLabel = paymentLabels[order.paymentStatus]|default(order.paymentStatus) %}
+
+    <style>
+        .hodina-order-sheet {
+            max-width: 980px;
+            margin: 0 auto 3rem auto;
+        }
+
+        .hodina-card {
+            border: 1px solid var(--border-color, #dfe3e6);
+            border-radius: 18px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            background: var(--body-bg, #fff);
+        }
+
+        .hodina-card h2,
+        .hodina-card h3 {
+            margin-top: 0;
+        }
+
+        .hodina-reference {
+            font-size: clamp(1.7rem, 7vw, 3.4rem);
+            font-weight: 800;
+            line-height: 1.05;
+            margin-bottom: .6rem;
+        }
+
+        .hodina-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .45rem .75rem;
+            border-radius: 999px;
+            font-weight: 700;
+            background: #eef7f1;
+            color: #166534;
+        }
+
+        .hodina-badge.is-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .hodina-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        .hodina-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: .65rem 0;
+            border-bottom: 1px solid var(--border-color, #e5e7eb);
+        }
+
+        .hodina-row:last-child {
+            border-bottom: 0;
+        }
+
+        .hodina-label {
+            color: var(--text-muted, #6b7280);
+            font-weight: 700;
+        }
+
+        .hodina-value {
+            text-align: right;
+            font-weight: 700;
+        }
+
+        .hodina-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: .75rem;
+            padding: .9rem 0;
+            border-bottom: 1px solid var(--border-color, #e5e7eb);
+        }
+
+        .hodina-item:last-child {
+            border-bottom: 0;
+        }
+
+        .hodina-item-title {
+            font-weight: 800;
+            font-size: 1.05rem;
+        }
+
+        .hodina-item-meta {
+            color: var(--text-muted, #6b7280);
+            margin-top: .15rem;
+        }
+
+        .hodina-total {
+            font-size: 2rem;
+            font-weight: 900;
+        }
+
+        .hodina-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            position: sticky;
+            bottom: 0;
+            padding: 1rem 0;
+            background: var(--body-bg, #fff);
+            z-index: 5;
+        }
+
+        .hodina-actions .btn {
+            min-height: 46px;
+            font-weight: 800;
+        }
+
+        @media (max-width: 780px) {
+            .hodina-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hodina-row {
+                display: block;
+            }
+
+            .hodina-value {
+                text-align: left;
+                margin-top: .2rem;
+            }
+
+            .hodina-actions {
+                display: grid;
+                grid-template-columns: 1fr;
+            }
+
+            .hodina-actions .btn {
+                width: 100%;
+            }
+        }
+    </style>
+
+    <div class="hodina-order-sheet">
+        <div class="hodina-actions">
+            <a class="btn btn-secondary" href="{{ urls.index }}">← Retour aux commandes</a>
+            <a class="btn btn-light" href="{{ urls.detail }}">Vue EasyAdmin</a>
+            <a class="btn btn-light" href="{{ urls.edit }}">Modifier</a>
+            {% if status == constant('App\\Entity\\CustomerOrder::STATUS_PENDING_VALIDATION') %}
+                <a class="btn btn-primary" href="{{ urls.confirm }}">✓ Valider + SMS</a>
+                <a class="btn btn-danger" href="{{ urls.cancel }}">⊘ Annuler + SMS</a>
+            {% elseif status == constant('App\\Entity\\CustomerOrder::STATUS_CONFIRMED') %}
+                <a class="btn btn-primary" href="{{ urls.prepare }}">⚙ Préparer + SMS</a>
+                <a class="btn btn-danger" href="{{ urls.cancel }}">⊘ Annuler + SMS</a>
+            {% elseif status == constant('App\\Entity\\CustomerOrder::STATUS_PREPARING') %}
+                <a class="btn btn-primary" href="{{ urls.ready }}">📦 Prête + SMS</a>
+            {% elseif status == constant('App\\Entity\\CustomerOrder::STATUS_READY_FOR_PICKUP') %}
+                <a class="btn btn-success" href="{{ urls.delivered }}">🚚 Livrée + SMS</a>
+            {% elseif status in [constant('App\\Entity\\CustomerOrder::STATUS_PICKED_UP'), constant('App\\Entity\\CustomerOrder::STATUS_OUT_FOR_DELIVERY')] %}
+                <a class="btn btn-success" href="{{ urls.delivered }}">🚚 Livrée + SMS</a>
+            {% endif %}
+        </div>
+
+        <section class="hodina-card">
+            <div class="hodina-reference">{{ order.orderReference ?: 'Commande #' ~ order.id }}</div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="hodina-badge {{ status == constant('App\\Entity\\CustomerOrder::STATUS_CANCELED') ? 'is-danger' : '' }}">
+                    {{ statusLabel }}
+                </span>
+                <span class="text-muted">Paiement : <strong>{{ paymentLabel }}</strong></span>
+            </div>
+        </section>
+
+        <div class="hodina-grid">
+            <section class="hodina-card">
+                <h2>Client</h2>
+                <div class="hodina-row">
+                    <div class="hodina-label">Nom</div>
+                    <div class="hodina-value">{{ customer.firstName }} {{ customer.lastName }}</div>
+                </div>
+                <div class="hodina-row">
+                    <div class="hodina-label">Téléphone</div>
+                    <div class="hodina-value"><a href="tel:{{ customer.phone }}">{{ customer.phone }}</a></div>
+                </div>
+                <div class="hodina-row">
+                    <div class="hodina-label">Email</div>
+                    <div class="hodina-value"><a href="mailto:{{ customer.email }}">{{ customer.email }}</a></div>
+                </div>
+            </section>
+
+            <section class="hodina-card">
+                <h2>Livraison</h2>
+                <div class="hodina-row">
+                    <div class="hodina-label">Zone</div>
+                    <div class="hodina-value">{{ order.deliveryZone ?: '-' }}</div>
+                </div>
+                {% if order.hasDeliveryPoint %}
+                    <div class="hodina-row">
+                        <div class="hodina-label">Point de remise</div>
+                        <div class="hodina-value">{{ order.deliveryPointSummary|nl2br }}</div>
+                    </div>
+                    {% if order.deliveryPointAppointmentSummary %}
+                        <div class="hodina-row">
+                            <div class="hodina-label">Rendez-vous client</div>
+                            <div class="hodina-value">{{ order.deliveryPointAppointmentSummary }}</div>
+                        </div>
+                    {% endif %}
+                    {% if order.deliveryPointTimeWindowSummary %}
+                        <div class="hodina-row">
+                            <div class="hodina-label">Plage indicative</div>
+                            <div class="hodina-value">{{ order.deliveryPointTimeWindowSummary }}</div>
+                        </div>
+                    {% endif %}
+                    {% if order.deliveryPointCustomerInstructions %}
+                        <div class="hodina-row">
+                            <div class="hodina-label">Précision client</div>
+                            <div class="hodina-value">{{ order.deliveryPointCustomerInstructions|nl2br }}</div>
+                        </div>
+                    {% endif %}
+                {% endif %}
+                <div class="hodina-row">
+                    <div class="hodina-label">{{ order.hasDeliveryPoint ? 'Adresse logistique' : 'Adresse' }}</div>
+                    <div class="hodina-value">
+                        {% if order.deliveryAddressLine1 %}
+                            {{ order.deliveryAddressLine1 }}<br>
+                            {% if order.deliveryAddressLine2 %}{{ order.deliveryAddressLine2 }}<br>{% endif %}
+                            {% if order.deliveryAddressLocalityName %}Localité : {{ order.deliveryAddressLocalityName }}<br>{% endif %}
+                            {{ order.deliveryAddressPostalCode }} {{ order.deliveryAddressCommune }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+                {% set delivery_map_url = order.deliveryPointGpsMapUrl ?: order.deliveryGpsMapUrl %}
+                {% if delivery_map_url %}
+                    <div class="hodina-row">
+                        <div class="hodina-label">GPS</div>
+                        <div class="hodina-value">
+                            <a class="btn btn-primary btn-sm" href="{{ delivery_map_url }}" target="_blank" rel="noopener">Ouvrir la carte</a><br>
+                            <span class="text-muted">{{ order.deliveryGpsCoordinatesLabel }}</span>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="hodina-row">
+                        <div class="hodina-label">GPS</div>
+                        <div class="hodina-value">Non renseigné</div>
+                    </div>
+                {% endif %}
+                {% if order.deliveryAddressInstructions and not order.hasDeliveryPoint %}
+                    <div class="hodina-row">
+                        <div class="hodina-label">Instructions client</div>
+                        <div class="hodina-value">{{ order.deliveryAddressInstructions|nl2br }}</div>
+                    </div>
+                {% endif %}
+                {% if order.deliveryAddressCourierNotes %}
+                    <div class="hodina-row">
+                        <div class="hodina-label">Note livreur</div>
+                        <div class="hodina-value">{{ order.deliveryAddressCourierNotes|nl2br }}</div>
+                    </div>
+                {% endif %}
+            </section>
+
+            <section class="hodina-card">
+                <h2>Facturation</h2>
+                <div class="hodina-row">
+                    <div class="hodina-label">Zone</div>
+                    <div class="hodina-value">
+                        {% if order.billingAddressZoneName or order.billingAddressZoneCode %}
+                            {{ order.billingAddressZoneName ?: order.billingAddressZoneCode }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="hodina-row">
+                    <div class="hodina-label">Adresse</div>
+                    <div class="hodina-value">
+                        {% if order.billingAddressLine1 %}
+                            {{ order.billingAddressLine1 }}<br>
+                            {% if order.billingAddressLine2 %}{{ order.billingAddressLine2 }}<br>{% endif %}
+                            {{ order.billingAddressPostalCode }} {{ order.billingAddressCommune }}
+                        {% else %}
+                            Non renseignée
+                        {% endif %}
+                    </div>
+                </div>
+                {% if order.billingAddressLabel %}
+                    <div class="hodina-row">
+                        <div class="hodina-label">Libellé</div>
+                        <div class="hodina-value">{{ order.billingAddressLabel }}</div>
+                    </div>
+                {% endif %}
+                {% if order.billingAddressNotes %}
+                    <div class="hodina-row">
+                        <div class="hodina-label">Notes</div>
+                        <div class="hodina-value">{{ order.billingAddressNotes|nl2br }}</div>
+                    </div>
+                {% endif %}
+            </section>
+        </div>
+
+        <section class="hodina-card">
+            <h2>Articles à préparer</h2>
+            {% if order.items is empty %}
+                <p class="text-muted">Aucune ligne de commande.</p>
+            {% else %}
+                {% for item in order.items %}
+                    <div class="hodina-item">
+                        <div>
+                            <div class="hodina-item-title">{{ item.product.name }}</div>
+                            <div class="hodina-item-meta">
+                                Vendeur : {{ item.seller }}<br>
+                                Quantité : {{ item.quantity }} × {{ item.unitPrice|number_format(2, ',', ' ') }} €
+                            </div>
+                        </div>
+                        <div class="text-end fw-bold">
+                            {{ item.lineTotal|number_format(2, ',', ' ') }} €
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </section>
+
+        <section class="hodina-card">
+            <h2>Résumé financier</h2>
+            <div class="hodina-row">
+                <div class="hodina-label">Sous-total</div>
+                <div class="hodina-value">{{ order.subtotal|number_format(2, ',', ' ') }} €</div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Frais livraison</div>
+                <div class="hodina-value">{{ order.deliveryFee|number_format(2, ',', ' ') }} €</div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Total à encaisser</div>
+                <div class="hodina-value hodina-total">{{ order.total|number_format(2, ',', ' ') }} €</div>
+            </div>
+        </section>
+
+        <section class="hodina-card">
+            <h2>Suivi</h2>
+            <div class="hodina-row">
+                <div class="hodina-label">Créée le</div>
+                <div class="hodina-value">{{ order.createdAt ? order.createdAt|date('d/m/Y H:i', order.displayTimezone) : '-' }}</div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Soumise le</div>
+                <div class="hodina-value">{{ order.submittedAt ? order.submittedAt|date('d/m/Y H:i', order.displayTimezone) : '-' }}</div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Confirmée le</div>
+                <div class="hodina-value">{{ order.confirmedAt ? order.confirmedAt|date('d/m/Y H:i', order.displayTimezone) : '-' }}</div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Préparation le</div>
+                <div class="hodina-value">{{ order.preparingAt ? order.preparingAt|date('d/m/Y H:i', order.displayTimezone) : '-' }}</div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Prête le</div>
+                <div class="hodina-value">{{ order.readyAt ? order.readyAt|date('d/m/Y H:i', order.displayTimezone) : '-' }}</div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Prise en charge</div>
+                <div class="hodina-value">
+                    {% if order.courierAssignedAt %}
+                        {{ order.courierAssignedAt|date('d/m/Y H:i', order.displayTimezone) }}{% if order.assignedCourier %}<br>{{ order.assignedCourier }}{% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Départ livraison</div>
+                <div class="hodina-value">{{ order.outForDeliveryAt ? order.outForDeliveryAt|date('d/m/Y H:i', order.displayTimezone) : '-' }}</div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Livrée le</div>
+                <div class="hodina-value">{{ order.deliveredAt ? order.deliveredAt|date('d/m/Y H:i', order.displayTimezone) : '-' }}</div>
+            </div>
+            <div class="hodina-row">
+                <div class="hodina-label">Annulée le</div>
+                <div class="hodina-value">{{ order.canceledAt ? order.canceledAt|date('d/m/Y H:i', order.displayTimezone) : '-' }}</div>
+            </div>
+        </section>
+    </div>
+{% endblock %}

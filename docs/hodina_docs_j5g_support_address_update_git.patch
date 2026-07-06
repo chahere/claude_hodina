@@ -1,0 +1,727 @@
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index fef90d5..786b7fa 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -1872,3 +1872,210 @@ DeliveryLogisticsService
+ ```
+ 
+ Le service ne doit pas encore écrire dans `CustomerOrder`.
++
++## J5G-SUPPORT-ADRESSES — distinction livraison / facturation et validation logistique (en cours de tests)
++
++Ce support a été ouvert pendant les tests de J5G-B4, avant de valider complètement le calcul de trajet réel. La raison est fonctionnelle : le calcul logistique dépend de la qualité des adresses. Si une adresse client contient une commune fausse, une mauvaise zone ou une commune non livrable, le service de trajet ne peut pas produire un résultat fiable.
++
++### Décision structurante
++
++On distingue désormais explicitement deux usages d'adresse :
++
++```text
++Adresse de livraison
++→ doit être livrable par Hodina
++→ doit correspondre à une commune présente dans Logistique > Communes livrées
++→ doit être cohérente avec sa zone PT ou GT
++→ code postal français à 5 chiffres obligatoire
++
++Adresse de facturation
++→ peut être hors zone de livraison Hodina
++→ peut être en métropole ou dans une autre zone française
++→ code postal français à 5 chiffres obligatoire
++→ zone dédiée : AUTRE — Autre
++```
++
++La zone ne doit pas s'appeler `OTHER` dans l'interface, car l'application est française. Le libellé retenu est `AUTRE — Autre`.
++
++### Pourquoi cette décision a été prise
++
++Pendant le test EasyAdmin utilisateur, une adresse de facturation pouvait devoir être une adresse métropole, par exemple Rennes / 35000. Cette adresse ne doit pas être rejetée au motif qu'elle n'est pas livrable à Mayotte. À l'inverse, une adresse de livraison hors commune livrable doit être refusée pour éviter de casser le calcul logistique.
++
++### Modèle cible
++
++`Address` porte un type métier :
++
++```text
++DELIVERY = adresse de livraison
++BILLING  = adresse de facturation
++```
++
++Ce type permet de ne pas appliquer les mêmes règles à toutes les adresses.
++
++### Validation métier
++
++Un validateur d'adresse a été ajouté autour de `Address` :
++
++```text
++DeliverableAddress
++DeliverableAddressValidator
++DeliveryCommuneMatcherService
++```
++
++Le validateur s'appuie sur les données J5G-B2/B3 :
++
++```text
++delivery_commune
++delivery_zone
++```
++
++Il refuse les cas suivants pour une livraison :
++
++```text
++commune inconnue dans la carte logistique
++code postal incompatible avec la commune connue
++zone PT/GT incohérente avec la commune
++zone AUTRE utilisée pour une livraison
++```
++
++Il accepte les cas suivants pour une facturation :
++
++```text
++commune non livrable
++zone AUTRE
++code postal français valide à 5 chiffres
++```
++
++### Tests déjà réalisés
++
++Depuis EasyAdmin utilisateur :
++
++```text
++Adresse de livraison correcte → OK
++Adresse de livraison hors commune livrable → KO propre
++Adresse mauvaise → KO propre, sans erreur 500
++```
++
++Exemple de KO propre observé :
++
++```text
++La commune "La Dominelais" avec le code postal "35390" n'est pas reconnue comme commune livrable Hodina.
++```
++
++### Tests encore à terminer
++
++```text
++Adresse de facturation hors Mayotte avec zone AUTRE
++Adresse de facturation avec code postal invalide
++Adresse de facturation avec zone PT/GT à refuser si elle est hors zone
++Inscription client avec livraison + facturation
++Checkout avec livraison + facturation
++Vérifications SQL des adresses créées
++Déploiement recette après validation locale
++```
++
++### Statut
++
++```text
++Statut : EN COURS DE TESTS
++Ne pas considérer ce support comme validé tant que inscription + checkout + facturation AUTRE ne sont pas confirmés.
++```
++
++
++## Incidents rencontrés pendant J5G-SUPPORT-ADRESSES
++
++### 1. Patch appliqué partiellement / classes manquantes
++
++Un premier patch ajoutait des références vers :
++
++```text
++App\Service\DeliveryCommuneMatcherService
++App\Validator\DeliverableAddress
++App\Validator\DeliverableAddressValidator
++```
++
++Mais les fichiers n'étaient pas présents. Les contrôles Symfony passaient partiellement, mais le code aurait cassé à l'exécution. Décision : ne pas commiter tant que les classes référencées n'existent pas réellement.
++
++### 2. Erreur PowerShell avec marqueurs `@'` / `'@`
++
++Lors de la création manuelle des fichiers PHP, les marqueurs PowerShell de here-string se sont retrouvés dans les fichiers PHP. Erreur observée :
++
++```text
++syntax error, unexpected string content "@", expecting end of file
++```
++
++Correction : fournir les fichiers corrigés en ZIP, sans marqueurs PowerShell et en UTF-8 sans BOM.
++
++### 3. Validation non déclenchée sur les adresses imbriquées EasyAdmin
++
++Le validateur `Address` ne suffisait pas si l'adresse était créée à l'intérieur du formulaire `Customer`. Décision : ajouter `#[Assert\Valid]` sur les relations concernées dans `Customer` afin que Symfony valide les objets enfants.
++
++### 4. Patchs qui ne s'appliquaient plus
++
++Plusieurs patchs ont échoué car les fichiers avaient déjà changé :
++
++```text
++src/Entity/Address.php
++src/Service/DeliveryCommuneMatcherService.php
++src/Validator/DeliverableAddressValidator.php
++```
++
++Décision : lorsqu'un fichier a évolué plusieurs fois dans une même session, reprendre à partir d'un extrait réel des sources et générer un patch adapté à l'état courant.
++
++### 5. Migration manquante après ajout du type d'adresse
++
++Le code attendait une colonne `address.type`, mais la migration n'était pas présente dans un patch intermédiaire. Symptôme :
++
++```text
++Database schema is not in sync with the current mapping file.
++```
++
++Correction : migration dédiée pour ajouter `address.type` et la zone `AUTRE — Autre`.
++
++### 6. Typed property non initialisée dans Address
++
++Erreur observée en EasyAdmin :
++
++```text
++Typed property App\Entity\Address::$commune must not be accessed before initialization
++```
++
++Cause : EasyAdmin peut valider une adresse imbriquée avant que tous les champs texte ne soient renseignés. Correction : initialiser les champs texte et sécuriser le validateur pour afficher une erreur formulaire au lieu d'une erreur 500.
++
++
++## J5G-B4 — branchement du service sur les liaisons réelles (démarré, non clôturé)
++
++J5G-B4 a été démarré avec l'objectif de brancher `DeliveryLogisticsService` sur `DeliveryCommuneConnection`.
++
++### Objectif technique
++
++```text
++DeliveryLogisticsService
++→ lit les communes actives
++→ lit les liaisons actives
++→ construit une carte en mémoire
++→ calcule un plus court chemin
++→ détecte LAND / BARGE
++→ enrichit CartLogisticsPreview
++→ affiche un aperçu dans le panier
++```
++
++### Fichiers touchés par le patch J5G-B4 en cours
++
++```text
++src/Service/DeliveryLogisticsService.php
++src/Dto/CartLogisticsPreview.php
++templates/cart/index.html.twig
++public/css/style_mobile.css
++```
++
++### Point d'arrêt volontaire
++
++Les tests J5G-B4 ont révélé que la qualité des adresses devait être fiabilisée avant de poursuivre. Le support adresses a donc été priorisé avant de valider définitivement l'algorithme de trajet.
++
++### Statut
++
++```text
++J5G-B4 : démarré
++Validation finale : en attente des tests adresses complets
++```
+diff --git a/docs/COMMIT_J5G_SUPPORT_ADDRESS.md b/docs/COMMIT_J5G_SUPPORT_ADDRESS.md
+new file mode 100644
+index 0000000..206bb8a
+--- /dev/null
++++ b/docs/COMMIT_J5G_SUPPORT_ADDRESS.md
+@@ -0,0 +1,64 @@
++# COMMIT — J5G-SUPPORT-ADRESSES — validation livraison / facturation
++
++## Contexte
++
++Ce support a été déclenché pendant les tests J5G-B4. Le calcul de trajet réel ne peut pas être fiable si les adresses client sont incohérentes.
++
++## Problème initial
++
++Dans EasyAdmin utilisateur, il était possible d'ajouter une fausse adresse de livraison, par exemple :
++
++```text
++La Dominelais
++35390
++Zone PT
++```
++
++Cette adresse n'est pas une commune livrable Hodina, mais elle pouvait être enregistrée.
++
++## Décisions prises
++
++- distinguer adresse de livraison et adresse de facturation ;
++- créer un type d'adresse `DELIVERY` / `BILLING` ;
++- conserver `PT` et `GT` pour les livraisons ;
++- ajouter `AUTRE — Autre` pour les facturations hors zone ;
++- valider les adresses de livraison contre `delivery_commune` ;
++- autoriser les adresses de facturation hors commune livrable avec code postal français valide ;
++- forcer la validation des adresses imbriquées dans `Customer` ;
++- corriger les erreurs 500 EasyAdmin sur adresse incomplète.
++
++## Incidents rencontrés
++
++- patchs partiellement appliqués ;
++- classes référencées mais absentes ;
++- marqueurs PowerShell `@'` / `'@` insérés dans les fichiers PHP ;
++- patchs non applicables après dérive des sources ;
++- migration manquante pour `address.type` ;
++- erreur `Typed property Address::$commune must not be accessed before initialization`.
++
++## État des tests
++
++Validé :
++
++```text
++EasyAdmin livraison correcte → OK
++EasyAdmin livraison fausse → KO propre
++Plus d'erreur 500 sur adresse incomplète/fausse testée
++```
++
++À terminer :
++
++```text
++facturation AUTRE
++inscription
++checkout
++vérifications SQL
++commit final
++recette
++```
++
++## Statut
++
++```text
++EN COURS — ne pas considérer comme clôturé avant tests complets.
++```
+diff --git a/docs/DECISIONS.md b/docs/DECISIONS.md
+index b5ab111..3434de8 100644
+--- a/docs/DECISIONS.md
++++ b/docs/DECISIONS.md
+@@ -2594,3 +2594,57 @@ schema:update --force est interdit dans ce projet pilote.
+ ```
+ 
+ Les écarts Doctrine doivent être corrigés par migration dédiée.
++
++## J5G-SUPPORT-ADRESSES — décisions prises pendant les tests J5G-B4
++
++### 1. Ne pas mélanger adresse de livraison et adresse de facturation
++
++Décision : une adresse porte désormais un usage métier explicite.
++
++```text
++DELIVERY = adresse de livraison
++BILLING  = adresse de facturation
++```
++
++Raison : une adresse de facturation peut être hors zone Hodina, alors qu'une adresse de livraison doit être strictement livrable.
++
++### 2. Nom français de la zone hors livraison
++
++Décision : la zone hors livraison s'appelle :
++
++```text
++AUTRE — Autre
++```
++
++La proposition `OTHER` a été rejetée car l'application est destinée à un usage français.
++
++### 3. Livraison stricte, facturation souple
++
++Décision :
++
++```text
++Livraison
++→ commune livrable obligatoire
++→ zone PT ou GT obligatoire
++→ cohérence commune / code postal / zone obligatoire
++
++Facturation
++→ commune libre
++→ code postal français à 5 chiffres
++→ zone AUTRE
++```
++
++### 4. Le support adresses passe avant la clôture J5G-B4
++
++Décision : ne pas clôturer J5G-B4 tant que les adresses ne sont pas propres.
++
++Raison : le calcul de trajet réel dépend directement de la commune client. Laisser passer une adresse fausse reviendrait à construire l'algorithme sur une donnée instable.
++
++### 5. Ne pas commiter les patchs tant que les tests complets ne sont pas terminés
++
++Décision de méthode :
++
++```text
++EasyAdmin livraison OK/KO ne suffit pas.
++Il faut aussi tester facturation AUTRE, inscription et checkout.
++```
+diff --git a/docs/DEPLOIEMENT_PREPROD.md b/docs/DEPLOIEMENT_PREPROD.md
+index b55191d..f8ad7fe 100644
+--- a/docs/DEPLOIEMENT_PREPROD.md
++++ b/docs/DEPLOIEMENT_PREPROD.md
+@@ -988,3 +988,46 @@ DashboardController sans #[AdminDashboard] déprécié EasyAdmin 5
+ ```
+ 
+ Décision : ne pas les corriger dans J5G-B3. Prévoir un lot technique séparé pour ne pas mélanger dette technique et logique métier livraison.
++
++## Déploiement futur — support adresses livraison / facturation
++
++Ce support n'est pas encore prêt à déployer tant que les tests locaux inscription + checkout + facturation AUTRE ne sont pas terminés.
++
++### Commandes prévues après validation locale
++
++```bash
++cd /home/vopu3712/recette.hodina.fr
++git pull
++php bin/console doctrine:migrations:migrate --env=prod --no-interaction
++php bin/console doctrine:schema:validate --env=prod
++php bin/console cache:clear --env=prod
++php bin/console cache:warmup --env=prod
++php bin/console lint:container --env=prod
++```
++
++### Vérifications SQL à faire après déploiement
++
++```bash
++php bin/console dbal:run-sql "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'address' ORDER BY ORDINAL_POSITION;" --env=prod
++
++php bin/console dbal:run-sql "SELECT code, name, is_active FROM delivery_zone ORDER BY code;" --env=prod
++```
++
++Résultats attendus :
++
++```text
++address.type présent
++DeliveryZone AUTRE — Autre présente et active
++schema:validate OK
++```
++
++### Prudence
++
++Ne pas déployer tant que le local n'a pas validé :
++
++```text
++EasyAdmin utilisateur
++inscription
++checkout
++facturation AUTRE
++```
+diff --git a/docs/ENTITIES.md b/docs/ENTITIES.md
+index fa11f77..75560c7 100644
+--- a/docs/ENTITIES.md
++++ b/docs/ENTITIES.md
+@@ -1541,3 +1541,67 @@ Address → commune client → DeliveryCommune
+ ```
+ 
+ puis calculer le chemin entre les deux.
++
++## Address — évolution support livraison / facturation
++
++`Address` évolue pour porter un type métier.
++
++### Types d'adresse
++
++```text
++DELIVERY = adresse de livraison
++BILLING  = adresse de facturation
++```
++
++### Adresse de livraison
++
++Une adresse de livraison doit permettre le calcul logistique. Elle doit donc être compatible avec :
++
++```text
++delivery_commune
++delivery_zone PT / GT
++DeliveryLogisticsService
++```
++
++Règles :
++
++```text
++commune livrable obligatoire
++code postal français à 5 chiffres
++cohérence commune / code postal
++cohérence commune / zone PT ou GT
++zone AUTRE interdite
++```
++
++### Adresse de facturation
++
++Une adresse de facturation n'est pas forcément livrable par Hodina.
++
++Règles :
++
++```text
++commune libre
++code postal français à 5 chiffres
++zone AUTRE — Autre
++```
++
++### Validation imbriquée dans Customer
++
++Comme les adresses peuvent être créées depuis le formulaire utilisateur EasyAdmin, les relations dans `Customer` doivent déclencher la validation des adresses enfants.
++
++Concept Symfony utilisé :
++
++```text
++#[Assert\Valid]
++```
++
++### Point technique important
++
++Les propriétés texte d'`Address` doivent être initialisées pour éviter les erreurs EasyAdmin sur objet imbriqué incomplet :
++
++```text
++line1 = ''
++postalCode = ''
++commune = ''
++deliveryZone temporairement nullable côté PHP pendant la validation formulaire
++```
+diff --git a/docs/PATCH_GUIDELINES.md b/docs/PATCH_GUIDELINES.md
+index db5df94..5e993b6 100644
+--- a/docs/PATCH_GUIDELINES.md
++++ b/docs/PATCH_GUIDELINES.md
+@@ -542,3 +542,35 @@ la migration affichait 0 SQL queries
+ tables métier vérifiées
+ les données étaient bien présentes
+ ```
++
++## Leçons de patch — session support adresses J5G
++
++### Toujours générer les patchs depuis l'état réel courant
++
++Plusieurs patchs n'ont pas pu s'appliquer car ils étaient basés sur un état intermédiaire. Règle renforcée : si un fichier a été modifié plusieurs fois dans une session, demander ou utiliser un extrait réel des sources avant de générer un nouveau patch.
++
++### Éviter les créations manuelles longues via here-string PowerShell
++
++Les marqueurs `@'` / `'@` peuvent finir dans les fichiers si la commande est mal copiée. Pour les fichiers critiques PHP, préférer :
++
++```text
++patch Git
++ou ZIP de fichiers complets
++ou écriture contrôlée UTF-8 sans BOM
++```
++
++### Ne pas considérer `cache:clear` comme preuve fonctionnelle
++
++Un `cache:clear` OK prouve que Symfony charge, mais ne prouve pas que les validations imbriquées fonctionnent. Pour les formulaires EasyAdmin avec objets enfants, il faut tester réellement une sauvegarde valide et une sauvegarde invalide.
++
++### Vérifier les migrations séparément
++
++Si une entité change mais que `schema:validate` est rouge, vérifier :
++
++```text
++migration présente ?
++migration exécutée ?
++dump SQL Doctrine ?
++```
++
++Ne jamais utiliser `schema:update --force`.
+diff --git a/docs/README_MAJ_J5G_SUPPORT_ADDRESS.md b/docs/README_MAJ_J5G_SUPPORT_ADDRESS.md
+new file mode 100644
+index 0000000..a75b529
+--- /dev/null
++++ b/docs/README_MAJ_J5G_SUPPORT_ADDRESS.md
+@@ -0,0 +1,30 @@
++# README MAJ — J5G-SUPPORT-ADRESSES
++
++## But
++
++Fiabiliser les adresses avant de clôturer J5G-B4.
++
++## À retenir
++
++```text
++Livraison = commune livrable Hodina + PT/GT
++Facturation = peut être hors zone + AUTRE
++```
++
++## Tests minimum avant commit
++
++```text
++EasyAdmin livraison valide
++EasyAdmin livraison invalide
++EasyAdmin facturation AUTRE valide
++EasyAdmin facturation code postal invalide
++Inscription client
++Checkout
++schema:validate
++lint:container
++git diff --check
++```
++
++## Ne pas oublier
++
++Les patchs et ZIP temporaires doivent être supprimés avant commit.
+diff --git a/docs/ROADMAP.md b/docs/ROADMAP.md
+index 4ca73d9..64fd734 100644
+--- a/docs/ROADMAP.md
++++ b/docs/ROADMAP.md
+@@ -1604,3 +1604,43 @@ pas de paiement
+ pas de portail vendeur
+ pas de refonte checkout complète
+ ```
++
++## J5G-SUPPORT-ADRESSES — jalon intercalé avant clôture J5G-B4
++
++Ce jalon n'était pas prévu comme étape principale, mais il est devenu nécessaire pendant les tests J5G-B4.
++
++### Pourquoi ce jalon est nécessaire
++
++J5G-B4 calcule un trajet entre la commune vendeur et la commune client. Si l'adresse client est incohérente, l'algorithme calcule sur une base fausse. Le support adresses est donc un prérequis de qualité.
++
++### Contenu du jalon
++
++```text
++- validation des communes livrables pour les adresses de livraison
++- distinction adresse de livraison / adresse de facturation
++- zone AUTRE — Autre pour la facturation hors zone Hodina
++- validation des adresses imbriquées dans Customer EasyAdmin
++- correction des erreurs 500 sur adresse incomplète
++```
++
++### Statut actuel
++
++```text
++EasyAdmin livraison valide : OK
++EasyAdmin livraison fausse : KO propre
++Facturation AUTRE : test encore à terminer
++Inscription : test encore à terminer
++Checkout : test encore à terminer
++Déploiement recette : pas encore à faire tant que les tests locaux ne sont pas terminés
++```
++
++### Reprise de J5G-B4 après ce support
++
++Une fois le support adresses validé :
++
++```text
++1. commiter le support adresses séparément
++2. reprendre les tests du panier J5G-B4
++3. valider les trajets réels LAND/BARGE
++4. déployer recette seulement après validation locale complète
++```
+diff --git a/docs/TODO.md b/docs/TODO.md
+index 6521063..4e2cad1 100644
+--- a/docs/TODO.md
++++ b/docs/TODO.md
+@@ -1181,3 +1181,37 @@ Objectif : brancher `DeliveryLogisticsService` sur les données réelles `Delive
+ - [ ] Ne pas figer de valeurs dans `CustomerOrder` avant J5G-E.
+ - [ ] Ne pas utiliser `schema:update --force`.
+ - [ ] Préférer un patch court et testable.
++
++## J5G-SUPPORT-ADRESSES — checklist en cours
++
++### Technique
++
++- [x] Ajouter `DeliveryCommuneMatcherService`.
++- [x] Ajouter `DeliverableAddress`.
++- [x] Ajouter `DeliverableAddressValidator`.
++- [x] Corriger les classes manquantes après patch initial.
++- [x] Corriger les fichiers PHP contenant les marqueurs PowerShell `@'` / `'@`.
++- [x] Forcer la validation des adresses imbriquées depuis `Customer`.
++- [x] Distinguer adresse de livraison et adresse de facturation.
++- [x] Prévoir la zone `AUTRE — Autre`.
++- [x] Ajouter la migration manquante pour `address.type` et `AUTRE`.
++- [x] Corriger l'erreur `Typed property Address::$commune` non initialisée.
++- [x] Vérifier que les fausses adresses de livraison ne passent plus depuis EasyAdmin.
++
++### Tests fonctionnels restant à finir
++
++- [ ] EasyAdmin : facturation Rennes / 35000 / AUTRE → OK attendu.
++- [ ] EasyAdmin : facturation code postal invalide → KO attendu.
++- [ ] EasyAdmin : facturation hors zone avec PT/GT → à vérifier selon règle retenue.
++- [ ] Inscription : livraison Mayotte + facturation identique.
++- [ ] Inscription : livraison Mayotte + facturation AUTRE.
++- [ ] Inscription : livraison hors commune livrable → KO.
++- [ ] Checkout : livraison Mayotte valide → OK.
++- [ ] Checkout : livraison mauvaise zone → KO.
++- [ ] Checkout : livraison hors commune livrable → KO.
++- [ ] Checkout : facturation différente AUTRE si le formulaire le permet.
++- [ ] Vérifier SQL `address.type`.
++- [ ] Vérifier SQL zone `AUTRE`.
++- [ ] Nettoyer les patchs et ZIP temporaires.
++- [ ] Commiter le support adresses séparément.
++- [ ] Reprendre la validation J5G-B4 panier / trajet réel.
+diff --git a/docs/VISION.md b/docs/VISION.md
+index f77fbd4..f2529d8 100644
+--- a/docs/VISION.md
++++ b/docs/VISION.md
+@@ -767,3 +767,26 @@ données propres
+ → snapshot commande
+ → optimisation terrain
+ ```
++
++## Vision produit — qualité des adresses comme socle de confiance
++
++La distinction livraison / facturation renforce la crédibilité de Hodina.
++
++Pour le client, cela signifie :
++
++```text
++je peux me faire livrer à Mayotte sur une commune réellement desservie
++je peux avoir une adresse de facturation différente, par exemple en métropole
++l'application ne mélange pas mes besoins administratifs et logistiques
++```
++
++Pour Hodina, cela signifie :
++
++```text
++moins d'erreurs de livraison
++moins de corrections manuelles
++calcul logistique plus fiable
++meilleure préparation au futur portail vendeur/livreur
++```
++
++Ce choix évite de traîner une dette fonctionnelle dès le pilote.
+diff --git a/docs/WORKFLOWS.md b/docs/WORKFLOWS.md
+index 291a89c..f1298f7 100644
+--- a/docs/WORKFLOWS.md
++++ b/docs/WORKFLOWS.md
+@@ -1537,3 +1537,55 @@ warning interne / message utilisateur
+ frais à confirmer par Hodina
+ commande possible si le reste du tunnel le permet
+ ```
++
++## Workflow adresses — état cible support J5G
++
++### Création / édition utilisateur EasyAdmin
++
++```text
++Admin ouvre un utilisateur
++→ ajoute une adresse
++→ choisit Type d'adresse
++   - Adresse de livraison
++   - Adresse de facturation
++→ renseigne adresse / code postal / commune / zone
++→ Symfony valide l'objet Address imbriqué
++→ sauvegarde seulement si les règles du type sont respectées
++```
++
++### Adresse de livraison
++
++```text
++Formulaire
++→ Address(type=DELIVERY)
++→ DeliverableAddressValidator
++→ DeliveryCommuneMatcherService
++→ recherche dans delivery_commune active et point logistique
++→ contrôle code postal
++→ contrôle zone PT/GT
++→ OK ou erreur formulaire
++```
++
++### Adresse de facturation
++
++```text
++Formulaire
++→ Address(type=BILLING)
++→ contrôle format code postal 5 chiffres
++→ zone AUTRE attendue
++→ commune libre
++→ OK ou erreur formulaire
++```
++
++### Checkout
++
++Le checkout doit utiliser l'adresse de livraison pour la logistique. L'adresse de facturation ne doit pas influencer le calcul de trajet.
++
++```text
++Livraison → logistique / trajet / frais
++Facturation → administratif / facture / justificatif
++```
++
++### Inscription
++
++L'inscription doit créer au minimum une adresse de livraison exploitable par Hodina. Si l'utilisateur fournit une facturation différente, elle doit être créée avec `type=BILLING` et zone `AUTRE` si hors zone livrable.

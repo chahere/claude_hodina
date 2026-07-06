@@ -1,0 +1,302 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}
+    Logistique — {{ order.orderReference ?: 'Commande #' ~ order.id }}
+{% endblock %}
+
+{% block main %}
+    <style>
+        .hodina-logistics-page {
+            max-width: 1100px;
+            margin: 0 auto 3rem auto;
+        }
+
+        .hodina-logistics-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            margin-bottom: 1rem;
+        }
+
+        .hodina-card {
+            border: 1px solid var(--border-color, #dfe3e6);
+            border-radius: 18px;
+            padding: 1.15rem;
+            margin-bottom: 1rem;
+            background: var(--body-bg, #fff);
+        }
+
+        .hodina-card h2,
+        .hodina-card h3 {
+            margin-top: 0;
+        }
+
+        .hodina-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: .75rem;
+        }
+
+        .hodina-metric {
+            border: 1px solid rgba(148, 163, 184, .35);
+            border-radius: 16px;
+            padding: .9rem;
+            background: rgba(148, 163, 184, .08);
+        }
+
+        .hodina-metric-label {
+            display: block;
+            color: var(--text-muted, #64748b);
+            font-size: .85rem;
+            margin-bottom: .25rem;
+        }
+
+        .hodina-metric-value {
+            display: block;
+            font-size: 1.45rem;
+            font-weight: 800;
+        }
+
+        .hodina-calc-table,
+        .hodina-route-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .hodina-calc-table th,
+        .hodina-calc-table td,
+        .hodina-route-table th,
+        .hodina-route-table td {
+            padding: .65rem .55rem;
+            border-bottom: 1px solid rgba(148, 163, 184, .25);
+            vertical-align: top;
+        }
+
+        .hodina-calc-table th,
+        .hodina-route-table th {
+            color: var(--text-muted, #64748b);
+            font-weight: 700;
+            text-align: left;
+        }
+
+        .hodina-amount {
+            white-space: nowrap;
+            font-weight: 800;
+            text-align: right;
+        }
+
+        .hodina-warning {
+            border-radius: 14px;
+            padding: .8rem 1rem;
+            background: rgba(245, 158, 11, .14);
+            border: 1px solid rgba(245, 158, 11, .35);
+        }
+
+        .hodina-route-path {
+            font-weight: 700;
+        }
+
+        .hodina-muted {
+            color: var(--text-muted, #64748b);
+        }
+
+        .hodina-json-block {
+            max-height: 420px;
+            overflow: auto;
+            border-radius: 14px;
+            padding: 1rem;
+            background: rgba(15, 23, 42, .06);
+            font-size: .82rem;
+            white-space: pre-wrap;
+        }
+    </style>
+
+    <div class="hodina-logistics-page">
+        <div class="hodina-logistics-actions">
+            <a class="btn btn-secondary" href="{{ urls.index }}">Retour aux commandes</a>
+            <a class="btn btn-primary" href="{{ urls.detail }}">Voir la commande</a>
+            <a class="btn btn-secondary" href="{{ urls.operationalSheet }}">Fiche terrain</a>
+        </div>
+
+
+        <section class="hodina-card">
+            <h2 class="h4">Source du calcul affiché</h2>
+            {% if hasSnapshot %}
+                <p class="mb-1"><strong>Snapshot figé de la commande.</strong></p>
+                <p class="hodina-muted mb-0">
+                    Les calculs affichés viennent des données enregistrées au moment de la validation panier.
+                    Ils restent disponibles même si les réglages Hodina, les liaisons ou les vendeurs changent plus tard.
+                    {% if snapshot.capturedAt is defined %}Capture : {{ snapshot.capturedAt }}.{% endif %}
+                </p>
+            {% else %}
+                <p class="mb-1"><strong>Recalcul dynamique.</strong></p>
+                <p class="hodina-muted mb-0">
+                    Cette commande est antérieure au snapshot logistique. Les calculs sont reconstruits avec les paramètres actuels.
+                </p>
+            {% endif %}
+        </section>
+
+        {% if preview.warnings is not empty %}
+            <div class="hodina-card hodina-warning">
+                <strong>Points à vérifier</strong>
+                <ul class="mb-0 mt-2">
+                    {% for warning in preview.warnings %}
+                        <li>{{ warning }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <section class="hodina-card">
+            <h2 class="h4">Résumé logistique</h2>
+            <div class="hodina-metrics">
+                <div class="hodina-metric">
+                    <span class="hodina-metric-label">Commune livrée</span>
+                    <span class="hodina-metric-value">{{ preview.clientCommuneName ?: '-' }}{% if preview.clientTerritory %} ({{ preview.clientTerritory }}){% endif %}</span>
+                </div>
+                <div class="hodina-metric">
+                    <span class="hodina-metric-label">Barge</span>
+                    <span class="hodina-metric-value">{{ preview.requiresBarge ? 'requise' : 'non détectée' }}</span>
+                </div>
+                <div class="hodina-metric">
+                    <span class="hodina-metric-label">Vendeurs</span>
+                    <span class="hodina-metric-value">{{ preview.sellerCount }}</span>
+                </div>
+                <div class="hodina-metric">
+                    <span class="hodina-metric-label">Communes de collecte</span>
+                    <span class="hodina-metric-value">{{ preview.collectionPointCount }}</span>
+                </div>
+                <div class="hodina-metric">
+                    <span class="hodina-metric-label">Liaisons terrestres</span>
+                    <span class="hodina-metric-value">{{ preview.landHopCount }}</span>
+                </div>
+                <div class="hodina-metric">
+                    <span class="hodina-metric-label">Traversées barge</span>
+                    <span class="hodina-metric-value">{{ preview.bargeHopCount }}</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="hodina-card">
+            <h2 class="h4">Calcul des frais client</h2>
+            <table class="hodina-calc-table">
+                <tbody>
+                    <tr>
+                        <th>Forfait local commune livrée</th>
+                        <td class="hodina-muted">Base PT/GT de {{ preview.clientCommuneName ?: 'la commune livrée' }}</td>
+                        <td class="hodina-amount">{{ preview.customerLocalDeliveryFee is not null ? preview.customerLocalDeliveryFee|number_format(2, ',', ' ') ~ ' €' : '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Trajet vendeur le plus contraignant</th>
+                        <td class="hodina-muted">Suppléments LAND + BARGE du trajet retenu</td>
+                        <td class="hodina-amount">{{ preview.routeCustomerExtraFee is not null ? preview.routeCustomerExtraFee|number_format(2, ',', ' ') ~ ' €' : '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Supplément communes de collecte</th>
+                        <td class="hodina-muted">Calculé sur les communes vendeurs distinctes, avec plafond multivendeur</td>
+                        <td class="hodina-amount">{{ preview.multiSellerCustomerExtraFee is not null ? preview.multiSellerCustomerExtraFee|number_format(2, ',', ' ') ~ ' €' : '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Sous-total avant plafond global</th>
+                        <td class="hodina-muted">Forfait local + trajet + supplément collecte</td>
+                        <td class="hodina-amount">{{ preview.uncappedCustomerDeliveryFee is not null ? preview.uncappedCustomerDeliveryFee|number_format(2, ',', ' ') ~ ' €' : '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Plafond global client</th>
+                        <td class="hodina-muted">{{ preview.customerDeliveryFeeCapApplied ? 'Plafond appliqué' : 'Non appliqué sur cette commande' }}</td>
+                        <td class="hodina-amount">{{ preview.customerDeliveryFeeCap and preview.customerDeliveryFeeCap > 0 ? preview.customerDeliveryFeeCap|number_format(2, ',', ' ') ~ ' €' : 'désactivé' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Frais client affichés</th>
+                        <td class="hodina-muted">Snapshot si disponible, sinon recalcul dynamique</td>
+                        <td class="hodina-amount">{{ preview.estimatedDeliveryFee is not null ? preview.estimatedDeliveryFee|number_format(2, ',', ' ') ~ ' €' : '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Frais figés sur la commande</th>
+                        <td class="hodina-muted">Montant réellement enregistré au moment de la validation panier</td>
+                        <td class="hodina-amount">{{ order.deliveryFee|number_format(2, ',', ' ') }} €</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="hodina-card">
+            <h2 class="h4">Estimation livreur / marge Hodina</h2>
+            <table class="hodina-calc-table">
+                <tbody>
+                    <tr>
+                        <th>Base livreur locale</th>
+                        <td class="hodina-muted">Rémunération livreur de la zone locale</td>
+                        <td class="hodina-amount">{{ preview.courierLocalPayout is not null ? preview.courierLocalPayout|number_format(2, ',', ' ') ~ ' €' : '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Supplément trajet livreur</th>
+                        <td class="hodina-muted">Suppléments LAND + BARGE côté livreur</td>
+                        <td class="hodina-amount">{{ preview.routeCourierExtraPayout is not null ? preview.routeCourierExtraPayout|number_format(2, ',', ' ') ~ ' €' : '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Payout livreur estimé</th>
+                        <td class="hodina-muted">Non plafonné automatiquement</td>
+                        <td class="hodina-amount">{{ preview.estimatedCourierPayout is not null ? preview.estimatedCourierPayout|number_format(2, ',', ' ') ~ ' €' : '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Marge livraison estimée</th>
+                        <td class="hodina-muted">Frais client affichés - payout livreur estimé</td>
+                        <td class="hodina-amount">{{ preview.estimatedDeliveryMargin is not null ? preview.estimatedDeliveryMargin|number_format(2, ',', ' ') ~ ' €' : '-' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="hodina-card">
+            <h2 class="h4">Détail des trajets de collecte</h2>
+            {% if preview.collectionRouteDetails is empty %}
+                <p class="hodina-muted mb-0">Aucun trajet de collecte détecté.</p>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="hodina-route-table">
+                        <thead>
+                            <tr>
+                                <th>Commune collecte</th>
+                                <th>Vendeur(s)</th>
+                                <th>Trajet</th>
+                                <th>Liaisons</th>
+                                <th>Client</th>
+                                <th>Livreur</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for route in preview.collectionRouteDetails %}
+                                <tr>
+                                    <td>{{ route.sellerCommuneName|default('-') }}</td>
+                                    <td>{{ route.sellerNamesSummary|default('Vendeur') }}</td>
+                                    <td>
+                                        <div class="hodina-route-path">{{ route.found ? route.summary : 'trajet à confirmer' }}</div>
+                                        <div class="hodina-muted">
+                                            terrestre client {{ route.landCustomerExtraFee|default(0)|number_format(2, ',', ' ') }} € ·
+                                            barge client {{ route.bargeCustomerExtraFee|default(0)|number_format(2, ',', ' ') }} €
+                                        </div>
+                                    </td>
+                                    <td>{{ route.landHopCount|default(0) }} terrestre(s), {{ route.bargeHopCount|default(0) }} barge</td>
+                                    <td class="hodina-amount">{{ route.customerExtraFee|default(0)|number_format(2, ',', ' ') }} €</td>
+                                    <td class="hodina-amount">{{ route.courierExtraPayout|default(0)|number_format(2, ',', ' ') }} €</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </section>
+
+        {% if snapshot is not empty %}
+            <section class="hodina-card">
+                <h2 class="h4">Données brutes conservées pour analyse</h2>
+                <p class="hodina-muted">
+                    Ce bloc sert d’audit : il peut être copié/exporté plus tard pour analyser les coûts, les trajets, les communes de collecte et les marges livraison.
+                </p>
+                <pre class="hodina-json-block">{{ snapshot|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+            </section>
+        {% endif %}
+
+    </div>
+{% endblock %}

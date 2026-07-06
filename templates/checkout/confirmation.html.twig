@@ -1,0 +1,134 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Commande envoyée – Hodina{% endblock %}
+
+{% block body %}
+<section class="section">
+  <div class="container">
+
+    <div class="confirmation-card">
+      <h1>Commande en validation</h1>
+
+      <p class="muted">
+        Merci 🙏 Ta commande n° <strong>{{ orderReference ?? ('#' ~ orderId) }}</strong> a bien été enregistrée.
+      </p>
+
+      <div class="confirmation-box">
+        <p>
+          🔎 Un administrateur vérifie la disponibilité des produits auprès des vendeurs.
+        </p>
+        <p class="muted small">
+          Tu recevras une confirmation dès validation.
+        </p>
+      </div>
+
+      {% if order is defined and order %}
+        <div class="confirmation-box" style="margin-top: 18px;">
+          <h2 style="margin-top: 0;">Récapitulatif de ta commande</h2>
+
+          <div class="summary-row">
+            <span class="muted">Statut</span>
+            <strong>En validation admin</strong>
+          </div>
+
+          <div class="summary-row">
+            <span class="muted">Paiement</span>
+            <strong>Manuel pendant le pilote</strong>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid rgba(0,0,0,.08); margin: 16px 0;">
+
+          <h3 style="margin-bottom: 10px;">Produits</h3>
+
+          {% if order.items is not empty %}
+            <div class="confirmation-order-items">
+              {% for item in order.items %}
+                <div class="summary-row" style="align-items: flex-start; gap: 12px;">
+                  <div>
+                    <strong>{{ item.product.name }}</strong>
+                    <div class="muted small">
+                      Vendeur : {{ item.seller.publicDisplayName }}<br>
+                      {{ item.quantity }} × {{ item.unitPrice|number_format(2, ',', ' ') }} €
+                    </div>
+                  </div>
+                  <strong>{{ item.lineTotal|number_format(2, ',', ' ') }} €</strong>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="muted small">Aucune ligne de commande enregistrée.</p>
+          {% endif %}
+
+          <hr style="border: 0; border-top: 1px solid rgba(0,0,0,.08); margin: 16px 0;">
+
+          <div class="summary-row">
+            <span class="muted">Total produits</span>
+            <strong>{{ order.subtotal|number_format(2, ',', ' ') }} €</strong>
+          </div>
+
+          <div class="summary-row">
+            <span class="muted">Frais de livraison</span>
+            <strong>{{ order.deliveryFee|number_format(2, ',', ' ') }} €</strong>
+          </div>
+          {% set logistics_preview = order.deliveryLogisticsSnapshot.preview|default(null) %}
+          {% set logistics_fee_reasons = [] %}
+          {% set logistics_land_hops = logistics_preview ? logistics_preview.landHopCount|default(0) : 0 %}
+          {% if logistics_land_hops > 0 %}
+            {% set logistics_fee_reasons = logistics_fee_reasons|merge([logistics_land_hops ~ ' commune' ~ (logistics_land_hops > 1 ? 's' : '') ~ ' traversée' ~ (logistics_land_hops > 1 ? 's' : '')]) %}
+          {% elseif logistics_preview and logistics_preview.collectionPointCount|default(0) > 1 %}
+            {% set logistics_fee_reasons = logistics_fee_reasons|merge(['plusieurs communes de collecte']) %}
+          {% endif %}
+          {% if logistics_preview and (logistics_preview.requiresBarge|default(false) or logistics_preview.bargeHopCount|default(0) > 0) %}
+            {% set logistics_fee_reasons = logistics_fee_reasons|merge(['barge']) %}
+          {% endif %}
+          {% if logistics_fee_reasons is not empty %}
+            <p class="cart-logistics-fee-note">Inclus : {{ logistics_fee_reasons|join(' + ') }}.</p>
+          {% endif %}
+
+          <div class="summary-row summary-total">
+            <span>Total commande</span>
+            <strong>{{ order.total|number_format(2, ',', ' ') }} €</strong>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid rgba(0,0,0,.08); margin: 16px 0;">
+
+          {% if order.hasDeliveryPoint %}
+            <h3 style="margin-bottom: 10px;">Point de remise</h3>
+            <p class="muted" style="white-space: pre-line; margin-bottom: 0;">{{ order.deliveryPointSummary }}</p>
+            {% if order.deliveryPointAppointmentSummary %}
+              <p class="muted small" style="margin-top: 8px;">Rendez-vous : <strong>{{ order.deliveryPointAppointmentSummary }}</strong></p>
+            {% endif %}
+            {% if order.deliveryPointTimeWindowSummary %}
+              <p class="muted small" style="margin-top: 8px;">Plage indicative : <strong>{{ order.deliveryPointTimeWindowSummary }}</strong></p>
+            {% endif %}
+            {% if order.deliveryPointCustomerInstructions %}
+              <p class="muted small" style="margin-top: 8px;">Précision : {{ order.deliveryPointCustomerInstructions }}</p>
+            {% endif %}
+          {% else %}
+            <h3 style="margin-bottom: 10px;">Adresse de livraison</h3>
+            <p class="muted" style="white-space: pre-line; margin-bottom: 0;">{{ order.deliveryAddressSummary }}</p>
+          {% endif %}
+
+          {% if order.deliveryAddressZoneName or order.deliveryAddressZoneCode %}
+            <p class="muted small" style="margin-top: 8px;">
+              Zone : {{ order.deliveryAddressZoneName ?? order.deliveryAddressZoneCode }}
+            </p>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <div class="confirmation-actions confirmation-actions--stacked">
+        {% if app.user %}
+          <a href="{{ path('client_orders_show', {id: order.id}) }}" class="btn btn-primary">
+            Voir le suivi de ma commande
+          </a>
+        {% endif %}
+        <a href="{{ path('product_catalogue') }}" class="btn btn-secondary">
+          Continuer mes achats
+        </a>
+      </div>
+    </div>
+
+  </div>
+</section>
+{% endblock %}

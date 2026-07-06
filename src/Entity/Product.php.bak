@@ -1,0 +1,182 @@
+<?php
+
+namespace App\Entity;
+
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
+use Doctrine\ORM\Mapping as ORM;
+
+
+#[ORM\Entity]
+#[ORM\Table(name: 'product')]
+#[ORM\HasLifecycleCallbacks]
+class Product
+{
+
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column]
+    private ?int $id = null;
+	
+	#[ORM\OneToMany(
+        mappedBy: 'product',
+        targetEntity: ProductImage::class,
+        cascade: ['persist', 'remove'],
+        orphanRemoval: true
+    )]
+    private Collection $images;
+	
+	#[ORM\Column(length: 255)]
+    private string $slug;
+	
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: false)]
+    private Seller $seller;
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: false)]
+    private Category $category;
+
+    #[ORM\Column(length: 160)]
+    private string $name;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $description = null;
+
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
+    private string $price = '0.00';
+
+    #[ORM\Column(length: 30, nullable: true)]
+    private ?string $unit = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $stockQty = null;
+
+    #[ORM\Column]
+    private bool $isUnlimitedStock = false;
+
+    #[ORM\Column]
+    private bool $isPreorder = false;
+
+    #[ORM\Column(nullable: true)]
+    private ?int $manufacturingDays = null;
+
+    #[ORM\Column]
+    private int $deliveryDays = 1;
+
+    #[ORM\Column]
+    private bool $isActive = true;
+
+    #[ORM\Column]
+    private \DateTimeImmutable $createdAt;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $updatedAt = null;
+	
+	public function __construct()
+	{
+		$this->createdAt = new \DateTimeImmutable();
+		$this->images = new ArrayCollection();
+	}
+	
+		#[ORM\PrePersist]
+	#[ORM\PreUpdate]
+	public function updateSlug(): void
+	{
+		if (!empty($this->name)) {
+			$this->slug = self::slugify($this->name);
+		}
+	}
+
+	private static function slugify(string $text): string
+	{
+		$text = trim($text);
+
+		// minuscule
+		$text = mb_strtolower($text, 'UTF-8');
+
+		// enlève accents (ex: "légumes" -> "legumes")
+		$converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+		if ($converted !== false) {
+			$text = $converted;
+		}
+
+		// remplace tout ce qui n'est pas a-z0-9 par des tirets
+		$text = preg_replace('~[^a-z0-9]+~', '-', $text);
+		$text = trim((string) $text, '-');
+
+		return $text !== '' ? $text : 'n-a';
+	}
+
+	public function getImages(): Collection
+	{
+		return $this->images;
+	}
+
+	public function addImage(ProductImage $image): self
+	{
+		if (!$this->images->contains($image)) {
+			$image->setProduct($this);
+
+			// position auto: dernière position + 1
+			$image->setPosition($this->images->count());
+
+			$this->images->add($image);
+		}
+
+		return $this;
+	}
+
+	public function removeImage(ProductImage $image): self
+	{
+		if ($this->images->removeElement($image)) {
+			// orphanRemoval => supprimera en DB
+		}
+		return $this;
+	}
+
+    public function getId(): ?int { return $this->id; }
+
+    public function getSeller(): Seller { return $this->seller; }
+    public function setSeller(Seller $seller): self { $this->seller = $seller; return $this; }
+
+    public function getCategory(): Category { return $this->category; }
+    public function setCategory(Category $category): self { $this->category = $category; return $this; }
+
+    public function getName(): string { return $this->name; }
+    public function setName(string $name): self { $this->name = $name; $this->touch(); return $this; }
+
+    public function getDescription(): ?string { return $this->description; }
+    public function setDescription(?string $description): self { $this->description = $description; $this->touch(); return $this; }
+
+    public function getPrice(): string { return $this->price; }
+    public function setPrice(string $price): self { $this->price = $price; $this->touch(); return $this; }
+
+    public function getUnit(): ?string { return $this->unit; }
+    public function setUnit(?string $unit): self { $this->unit = $unit; $this->touch(); return $this; }
+
+    public function getStockQty(): ?int { return $this->stockQty; }
+    public function setStockQty(?int $stockQty): self { $this->stockQty = $stockQty; $this->touch(); return $this; }
+
+    public function isUnlimitedStock(): bool { return $this->isUnlimitedStock; }
+    public function setIsUnlimitedStock(bool $isUnlimitedStock): self { $this->isUnlimitedStock = $isUnlimitedStock; $this->touch(); return $this; }
+
+    public function isPreorder(): bool { return $this->isPreorder; }
+    public function setIsPreorder(bool $isPreorder): self { $this->isPreorder = $isPreorder; $this->touch(); return $this; }
+
+    public function getManufacturingDays(): ?int { return $this->manufacturingDays; }
+    public function setManufacturingDays(?int $manufacturingDays): self { $this->manufacturingDays = $manufacturingDays; $this->touch(); return $this; }
+
+    public function getDeliveryDays(): int { return $this->deliveryDays; }
+    public function setDeliveryDays(int $deliveryDays): self { $this->deliveryDays = $deliveryDays; $this->touch(); return $this; }
+
+    public function isActive(): bool { return $this->isActive; }
+    public function setIsActive(bool $isActive): self { $this->isActive = $isActive; $this->touch(); return $this; }
+
+    public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
+    public function setCreatedAt(\DateTimeImmutable $createdAt): self { $this->createdAt = $createdAt; return $this; }
+ 
+    
+    private function touch(): void { $this->updatedAt = new \DateTimeImmutable(); }
+    
+}

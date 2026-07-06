@@ -1,0 +1,10 @@
+### Hodina — runtime, secrets et fichiers générés ###
+.env.local
+.env.*.local
+prod.env.local
+
+/public/uploads/products/*
+!/public/uploads/products/.gitkeep
+
+/public/assets/
+/public/error_log

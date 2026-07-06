@@ -1,0 +1,599 @@
+diff --git a/src/Controller/Admin/AddressCrudController.php b/src/Controller/Admin/AddressCrudController.php
+index 9f15b61..4a8cdfc 100644
+--- a/src/Controller/Admin/AddressCrudController.php
++++ b/src/Controller/Admin/AddressCrudController.php
+@@ -85,7 +85,12 @@ class AddressCrudController extends AbstractCrudController
+             ->onlyOnDetail()
+             ->formatValue(static fn (?string $value): string => $value ? sprintf('<a href="%s" target="_blank" rel="noopener">Ouvrir dans Google Maps</a>', htmlspecialchars($value, ENT_QUOTES)) : '-');
+ 
+-        yield TextareaField::new('notes', 'Notes')
+-            ->hideOnIndex();
++        yield TextareaField::new('notes', 'Instructions client')
++            ->hideOnIndex()
++            ->setHelp('Visible côté admin/livreur. Exemple : près du centre commercial Baobab, portail bleu, appeler en arrivant.');
++
++        yield TextareaField::new('courierNotes', 'Commentaire livreur / terrain')
++            ->hideOnIndex()
++            ->setHelp('Note interne pour les prochaines livraisons. Non affichée au client dans le pilote.');
+     }
+ }
+diff --git a/src/Controller/Admin/CustomerOrderCrudController.php b/src/Controller/Admin/CustomerOrderCrudController.php
+index f8872f9..bbc7369 100644
+--- a/src/Controller/Admin/CustomerOrderCrudController.php
++++ b/src/Controller/Admin/CustomerOrderCrudController.php
+@@ -112,6 +112,14 @@ class CustomerOrderCrudController extends AbstractCrudController
+             ->setFormTypeOption('disabled', true)
+             ->setHelp('Snapshot figé au moment de la commande. Ne dépend pas du carnet d’adresses client.');
+ 
++        yield TextareaField::new('deliveryAddressInstructions', 'Instructions client')
++            ->onlyOnDetail()
++            ->formatValue(static fn (?string $value): string => $value ? nl2br(htmlspecialchars($value, ENT_QUOTES)) : 'Non renseignées');
++
++        yield TextareaField::new('deliveryAddressCourierNotes', 'Commentaire livreur / terrain')
++            ->onlyOnDetail()
++            ->formatValue(static fn (?string $value): string => $value ? nl2br(htmlspecialchars($value, ENT_QUOTES)) : 'Non renseigné');
++
+         yield TextField::new('deliveryGpsMapUrl', 'GPS livraison')
+             ->onlyOnDetail()
+             ->formatValue(static fn (?string $value): string => $value ? sprintf('<a href="%s" target="_blank" rel="noopener">Ouvrir dans Google Maps</a>', htmlspecialchars($value, ENT_QUOTES)) : 'Non renseigné');
+diff --git a/src/Controller/CheckoutController.php b/src/Controller/CheckoutController.php
+index 0a6f346..892b5df 100644
+--- a/src/Controller/CheckoutController.php
++++ b/src/Controller/CheckoutController.php
+@@ -75,6 +75,7 @@ final class CheckoutController extends AbstractController
+         'postalCode' => '',
+         'commune' => '',
+         'zone' => '',
++        'deliveryInstructions' => '',
+         'gpsLatitude' => '',
+         'gpsLongitude' => '',
+         'gpsAccuracyMeters' => '',
+@@ -107,6 +108,7 @@ final class CheckoutController extends AbstractController
+                 $checkoutDefaults['zone'] = $lastDeliveryCommune->getTerritory();
+             }
+ 
++            $checkoutDefaults['deliveryInstructions'] = $lastAddress->getDeliveryInstructions() ?? '';
+             $checkoutDefaults['gpsLatitude'] = $lastAddress->getGpsLatitude() ?? '';
+             $checkoutDefaults['gpsLongitude'] = $lastAddress->getGpsLongitude() ?? '';
+             $checkoutDefaults['gpsAccuracyMeters'] = $lastAddress->getGpsAccuracyMeters() ?? '';
+@@ -166,6 +168,7 @@ final class CheckoutController extends AbstractController
+             }
+ 
+             $deliveryPostalCode = trim((string) $deliveryCommune->getPostalCode());
++            $deliveryInstructions = $this->normalizeDeliveryInstructions($form->get('deliveryInstructions')->getData());
+             $gpsLatitude = $this->normalizeGpsLatitude($form->get('gpsLatitude')->getData());
+             $gpsLongitude = $this->normalizeGpsLongitude($form->get('gpsLongitude')->getData());
+             $gpsAccuracyMeters = $this->normalizeGpsAccuracyMeters($form->get('gpsAccuracyMeters')->getData());
+@@ -201,7 +204,8 @@ final class CheckoutController extends AbstractController
+                 ->setLine1((string) ($data['address'] ?? ''))
+                 ->setPostalCode($deliveryPostalCode)
+                 ->setCommune($deliveryCommune->getName())
+-                ->setDeliveryZone($deliveryZone);
++                ->setDeliveryZone($deliveryZone)
++                ->setDeliveryInstructions($deliveryInstructions);
+ 
+             $finalLogisticsPreview = $deliveryLogistics->previewForCart($quoteAddress, $cartData);
+             $deliveryFeeFloat = $finalLogisticsPreview->estimatedDeliveryFee ?? 0.0;
+@@ -280,6 +284,7 @@ final class CheckoutController extends AbstractController
+                     ->setPostalCode($deliveryPostalCode)
+                     ->setCommune($deliveryCommune->getName())
+                     ->setDeliveryZone($deliveryZone)
++                    ->setDeliveryInstructions($deliveryInstructions)
+                     ->setGpsLatitude($gpsLatitude)
+                     ->setGpsLongitude($gpsLongitude)
+                     ->setGpsAccuracyMeters($gpsAccuracyMeters);
+@@ -307,6 +312,7 @@ final class CheckoutController extends AbstractController
+                     ->setPostalCode($deliveryPostalCode)
+                     ->setCommune($deliveryCommune->getName())
+                     ->setDeliveryZone($deliveryZone)
++                    ->setDeliveryInstructions($deliveryInstructions)
+                     ->setGpsLatitude($gpsLatitude)
+                     ->setGpsLongitude($gpsLongitude)
+                     ->setGpsAccuracyMeters($gpsAccuracyMeters);
+@@ -314,7 +320,7 @@ final class CheckoutController extends AbstractController
+                 $em->persist($address);
+             }
+ 
+-            $this->applyGpsCoordinatesToAddress($address, $gpsLatitude, $gpsLongitude, $gpsAccuracyMeters);
++            $this->applyDeliveryMetadataToAddress($address, $deliveryInstructions, $gpsLatitude, $gpsLongitude, $gpsAccuracyMeters);
+ 
+             $billingAddress = $this->findReusableAddress(
+                 $em,
+@@ -574,6 +580,13 @@ final class CheckoutController extends AbstractController
+     }
+ 
+ 
++    private function applyDeliveryMetadataToAddress(Address $address, ?string $deliveryInstructions, ?string $latitude, ?string $longitude, ?string $accuracyMeters): void
++    {
++        $address->setDeliveryInstructions($deliveryInstructions);
++
++        $this->applyGpsCoordinatesToAddress($address, $latitude, $longitude, $accuracyMeters);
++    }
++
+     private function applyGpsCoordinatesToAddress(Address $address, ?string $latitude, ?string $longitude, ?string $accuracyMeters): void
+     {
+         if ($latitude !== null && $longitude !== null) {
+@@ -591,6 +604,17 @@ final class CheckoutController extends AbstractController
+             ->setGpsAccuracyMeters(null);
+     }
+ 
++    private function normalizeDeliveryInstructions(mixed $value): ?string
++    {
++        $value = is_scalar($value) ? trim((string) $value) : '';
++
++        if ($value === '') {
++            return null;
++        }
++
++        return mb_substr($value, 0, 1000);
++    }
++
+     private function normalizeGpsLatitude(mixed $value): ?string
+     {
+         $number = $this->normalizeGpsNumber($value);
+diff --git a/src/Controller/Courier/CourierDashboardController.php b/src/Controller/Courier/CourierDashboardController.php
+index 6dfcaf5..195f358 100644
+--- a/src/Controller/Courier/CourierDashboardController.php
++++ b/src/Controller/Courier/CourierDashboardController.php
+@@ -2,6 +2,7 @@
+ 
+ namespace App\Controller\Courier;
+ 
++use App\Entity\Address;
+ use App\Entity\Customer;
+ use App\Entity\CustomerOrder;
+ use App\Service\CustomerOrderWorkflowService;
+@@ -90,6 +91,48 @@ final class CourierDashboardController extends AbstractController
+         return $this->redirectToRoute('courier_dashboard');
+     }
+ 
++
++    #[Route('/livreur/commande/{id}/note-adresse', name: 'courier_order_address_note', methods: ['POST'])]
++    public function updateAddressNote(
++        int $id,
++        Request $request,
++        EntityManagerInterface $entityManager
++    ): RedirectResponse {
++        $order = $entityManager->getRepository(CustomerOrder::class)->find($id);
++        $courier = $this->getCourier();
++
++        if (!$order instanceof CustomerOrder) {
++            $this->addFlash('danger', 'Commande introuvable.');
++            return $this->redirectToRoute('courier_dashboard');
++        }
++
++        if (!$this->isCsrfTokenValid('courier_address_note_' . $order->getId(), (string) $request->request->get('_token'))) {
++            $this->addFlash('danger', 'Jeton de sécurité invalide.');
++            return $this->redirectToRoute('courier_dashboard');
++        }
++
++        if (!$this->canUpdateAddressNote($order, $courier)) {
++            $this->addFlash('warning', 'Tu ne peux pas modifier la note terrain de cette commande.');
++            return $this->redirectToRoute('courier_dashboard');
++        }
++
++        $address = $order->getDeliveryAddress();
++        if (!$address instanceof Address) {
++            $this->addFlash('warning', 'Adresse de livraison introuvable pour cette commande.');
++            return $this->redirectToRoute('courier_dashboard');
++        }
++
++        $note = $this->normalizeCourierNote($request->request->get('courier_note'));
++        $address->setCourierNotes($note);
++        $order->setDeliveryAddressCourierNotes($note);
++
++        $entityManager->flush();
++
++        $this->addFlash('success', 'Commentaire terrain enregistré pour les prochaines livraisons.');
++
++        return $this->redirectToRoute('courier_dashboard');
++    }
++
+     #[Route('/livreur/commande/{id}/livree', name: 'courier_order_delivered', methods: ['POST'])]
+     public function delivered(
+         int $id,
+@@ -119,6 +162,28 @@ final class CourierDashboardController extends AbstractController
+         return $this->redirectToRoute('courier_dashboard');
+     }
+ 
++
++    private function canUpdateAddressNote(CustomerOrder $order, Customer $courier): bool
++    {
++        if ($order->getStatus() === CustomerOrder::STATUS_READY_FOR_PICKUP && $order->getAssignedCourier() === null) {
++            return true;
++        }
++
++        return $order->getStatus() === CustomerOrder::STATUS_OUT_FOR_DELIVERY
++            && $order->getAssignedCourier()?->getId() === $courier->getId();
++    }
++
++    private function normalizeCourierNote(mixed $value): ?string
++    {
++        $value = is_scalar($value) ? trim((string) $value) : '';
++
++        if ($value === '') {
++            return null;
++        }
++
++        return mb_substr($value, 0, 1000);
++    }
++
+     private function getCourier(): Customer
+     {
+         $user = $this->getUser();
+diff --git a/src/Entity/Address.php b/src/Entity/Address.php
+index f9f0976..f47f513 100644
+--- a/src/Entity/Address.php
++++ b/src/Entity/Address.php
+@@ -47,9 +47,22 @@ class Address
+     #[ORM\JoinColumn(nullable: false)]
+     private ?DeliveryZone $deliveryZone = null;
+ 
++    /**
++     * Instructions donnees par le client pour retrouver l'adresse.
++     * Exemple : "pres du centre commercial Baobab, portail bleu".
++     *
++     * Champ historique conserve sous le nom DB notes pour eviter un doublon.
++     */
+     #[ORM\Column(type: 'text', nullable: true)]
+     private ?string $notes = null;
+ 
++    /**
++     * Note terrain interne, enrichie par admin/livreur pour les prochaines livraisons.
++     * Non affichée au client dans le pilote.
++     */
++    #[ORM\Column(type: 'text', nullable: true)]
++    private ?string $courierNotes = null;
++
+     #[ORM\Column(type: 'decimal', precision: 10, scale: 7, nullable: true)]
+     private ?string $gpsLatitude = null;
+ 
+@@ -122,7 +135,23 @@ class Address
+     public function setDeliveryZone(?DeliveryZone $deliveryZone): self { $this->deliveryZone = $deliveryZone; return $this; }
+ 
+     public function getNotes(): ?string { return $this->notes; }
+-    public function setNotes(?string $notes): self { $this->notes = $notes !== null ? trim($notes) : null; return $this; }
++    public function setNotes(?string $notes): self
++    {
++        $notes = $notes !== null ? trim($notes) : null;
++        $this->notes = $notes !== '' ? $notes : null;
++        return $this;
++    }
++
++    public function getDeliveryInstructions(): ?string { return $this->getNotes(); }
++    public function setDeliveryInstructions(?string $deliveryInstructions): self { return $this->setNotes($deliveryInstructions); }
++
++    public function getCourierNotes(): ?string { return $this->courierNotes; }
++    public function setCourierNotes(?string $courierNotes): self
++    {
++        $courierNotes = $courierNotes !== null ? trim($courierNotes) : null;
++        $this->courierNotes = $courierNotes !== '' ? $courierNotes : null;
++        return $this;
++    }
+ 
+     public function getGpsLatitude(): ?string { return $this->gpsLatitude; }
+     public function setGpsLatitude(?string $gpsLatitude): self
+diff --git a/src/Entity/CustomerOrder.php b/src/Entity/CustomerOrder.php
+index 12221c1..5512758 100644
+--- a/src/Entity/CustomerOrder.php
++++ b/src/Entity/CustomerOrder.php
+@@ -60,6 +60,9 @@ class CustomerOrder
+     #[ORM\Column(type: 'text', nullable: true)]
+     private ?string $deliveryAddressNotes = null;
+ 
++    #[ORM\Column(type: 'text', nullable: true)]
++    private ?string $deliveryAddressCourierNotes = null;
++
+     #[ORM\Column(type: 'decimal', precision: 10, scale: 7, nullable: true)]
+     private ?string $deliveryAddressGpsLatitude = null;
+ 
+@@ -186,7 +189,8 @@ class CustomerOrder
+         $this->deliveryAddressCommune = $address?->getCommune();
+         $this->deliveryAddressZoneCode = $address?->getDeliveryZone()?->getCode();
+         $this->deliveryAddressZoneName = $address?->getDeliveryZone()?->getName();
+-        $this->deliveryAddressNotes = $address?->getNotes();
++        $this->deliveryAddressNotes = $address?->getDeliveryInstructions();
++        $this->deliveryAddressCourierNotes = $address?->getCourierNotes();
+         $this->deliveryAddressGpsLatitude = $address?->getGpsLatitude();
+         $this->deliveryAddressGpsLongitude = $address?->getGpsLongitude();
+         $this->deliveryAddressGpsAccuracyMeters = $address?->getGpsAccuracyMeters();
+@@ -215,7 +219,16 @@ class CustomerOrder
+     public function getDeliveryAddressCommune(): ?string { return $this->deliveryAddressCommune ?? $this->deliveryAddress?->getCommune(); }
+     public function getDeliveryAddressZoneCode(): ?string { return $this->deliveryAddressZoneCode ?? $this->deliveryAddress?->getDeliveryZone()?->getCode(); }
+     public function getDeliveryAddressZoneName(): ?string { return $this->deliveryAddressZoneName ?? $this->deliveryAddress?->getDeliveryZone()?->getName(); }
+-    public function getDeliveryAddressNotes(): ?string { return $this->deliveryAddressNotes ?? $this->deliveryAddress?->getNotes(); }
++    public function getDeliveryAddressNotes(): ?string { return $this->deliveryAddressNotes ?? $this->deliveryAddress?->getDeliveryInstructions(); }
++    public function getDeliveryAddressInstructions(): ?string { return $this->getDeliveryAddressNotes(); }
++    public function getDeliveryAddressCourierNotes(): ?string { return $this->deliveryAddressCourierNotes ?? $this->deliveryAddress?->getCourierNotes(); }
++    public function setDeliveryAddressCourierNotes(?string $deliveryAddressCourierNotes): self
++    {
++        $deliveryAddressCourierNotes = $deliveryAddressCourierNotes !== null ? trim($deliveryAddressCourierNotes) : null;
++        $this->deliveryAddressCourierNotes = $deliveryAddressCourierNotes !== '' ? $deliveryAddressCourierNotes : null;
++        return $this;
++    }
++
+     public function getDeliveryAddressGpsLatitude(): ?string { return $this->deliveryAddressGpsLatitude ?? $this->deliveryAddress?->getGpsLatitude(); }
+     public function getDeliveryAddressGpsLongitude(): ?string { return $this->deliveryAddressGpsLongitude ?? $this->deliveryAddress?->getGpsLongitude(); }
+     public function getDeliveryAddressGpsAccuracyMeters(): ?string { return $this->deliveryAddressGpsAccuracyMeters ?? $this->deliveryAddress?->getGpsAccuracyMeters(); }
+diff --git a/src/Form/CheckoutType.php b/src/Form/CheckoutType.php
+index 2e738c9..3ccf2bb 100644
+--- a/src/Form/CheckoutType.php
++++ b/src/Form/CheckoutType.php
+@@ -9,10 +9,12 @@ use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+ use Symfony\Component\Form\Extension\Core\Type\EmailType;
+ use Symfony\Component\Form\Extension\Core\Type\HiddenType;
+ use Symfony\Component\Form\Extension\Core\Type\TelType;
++use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+ use Symfony\Component\Form\Extension\Core\Type\TextType;
+ use Symfony\Component\Form\FormBuilderInterface;
+ use Symfony\Component\OptionsResolver\OptionsResolver;
+ use Symfony\Component\Validator\Constraints\IsTrue;
++use Symfony\Component\Validator\Constraints\Length;
+ use Symfony\Component\Validator\Constraints\NotBlank;
+ 
+ final class CheckoutType extends AbstractType
+@@ -48,6 +50,21 @@ final class CheckoutType extends AbstractType
+             ->add('zone', HiddenType::class, [
+                 'required' => false,
+             ])
++            ->add('deliveryInstructions', TextareaType::class, [
++                'label' => 'Instructions de livraison',
++                'mapped' => false,
++                'required' => false,
++                'constraints' => [
++                    new Length(
++                        max: 1000,
++                        maxMessage: 'Les instructions de livraison ne doivent pas dépasser {{ limit }} caractères.'
++                    ),
++                ],
++                'attr' => [
++                    'rows' => 3,
++                    'placeholder' => 'Exemple : près du centre commercial Baobab, portail bleu, appeler en arrivant…',
++                ],
++            ])
+             ->add('gpsLatitude', HiddenType::class, [
+                 'mapped' => false,
+                 'required' => false,
+diff --git a/templates/admin/customer_order/operational_sheet.html.twig b/templates/admin/customer_order/operational_sheet.html.twig
+index 2b064de..bd7337a 100644
+--- a/templates/admin/customer_order/operational_sheet.html.twig
++++ b/templates/admin/customer_order/operational_sheet.html.twig
+@@ -225,10 +225,16 @@
+                         <div class="hodina-value">Non renseigné</div>
+                     </div>
+                 {% endif %}
+-                {% if order.deliveryAddressNotes %}
++                {% if order.deliveryAddressInstructions %}
+                     <div class="hodina-row">
+-                        <div class="hodina-label">Notes</div>
+-                        <div class="hodina-value">{{ order.deliveryAddressNotes|nl2br }}</div>
++                        <div class="hodina-label">Instructions client</div>
++                        <div class="hodina-value">{{ order.deliveryAddressInstructions|nl2br }}</div>
++                    </div>
++                {% endif %}
++                {% if order.deliveryAddressCourierNotes %}
++                    <div class="hodina-row">
++                        <div class="hodina-label">Note livreur</div>
++                        <div class="hodina-value">{{ order.deliveryAddressCourierNotes|nl2br }}</div>
+                     </div>
+                 {% endif %}
+             </section>
+diff --git a/templates/cart/index.html.twig b/templates/cart/index.html.twig
+index 1a7fe7a..315e09b 100644
+--- a/templates/cart/index.html.twig
++++ b/templates/cart/index.html.twig
+@@ -162,6 +162,9 @@
+               <p class="muted small" style="margin:2px 0 0;">
+                 Zone : <span data-delivery-current-zone>Choisis une commune livrée.</span>
+               </p>
++              <p class="muted small" style="margin:2px 0 0;" data-delivery-current-instructions>
++                Instructions : non renseignées
++              </p>
+               <p class="muted small" style="margin:2px 0 0;" data-delivery-current-gps>
+                 GPS : non renseigné
+               </p>
+@@ -189,6 +192,7 @@
+                       data-postal-code="{{ addr.postalCode }}"
+                       data-commune="{{ addr.commune }}"
+                       data-zone="{{ addr.deliveryZone ? addr.deliveryZone.code : 'GT' }}"
++                      data-delivery-instructions="{{ addr.deliveryInstructions|e('html_attr') }}"
+                       data-gps-latitude="{{ addr.gpsLatitude }}"
+                       data-gps-longitude="{{ addr.gpsLongitude }}"
+                       data-gps-accuracy="{{ addr.gpsAccuracyMeters }}"
+@@ -199,6 +203,9 @@
+                       {% if addr.deliveryZone %}
+                         <br><span class="muted small">Zone : {{ addr.deliveryZone.code }}</span>
+                       {% endif %}
++                      {% if addr.deliveryInstructions %}
++                        <br><span class="muted small">Instructions enregistrées</span>
++                      {% endif %}
+                       {% if addr.gpsMapUrl %}
+                         <br><span class="muted small">GPS enregistré</span>
+                       {% endif %}
+@@ -244,6 +251,7 @@
+               {{ form_widget(form.gpsLatitude) }}
+               {{ form_widget(form.gpsLongitude) }}
+               {{ form_widget(form.gpsAccuracyMeters) }}
++
+               <div class="client-form-field{% if form.zone.vars.errors|length > 0 %} has-error{% endif %}">
+                 <span class="client-form-label">Zone de livraison</span>
+                 <div id="checkout-zone-preview" class="client-form-control" aria-live="polite">
+@@ -255,6 +263,15 @@
+                 {% endif %}
+               </div>
+ 
++              <div class="client-form-field{% if form.deliveryInstructions.vars.errors|length > 0 %} has-error{% endif %}">
++                {{ form_label(form.deliveryInstructions, null, {'label_attr': {'class': 'client-form-label'}}) }}
++                {{ form_widget(form.deliveryInstructions, {'attr': {'class': 'client-form-control'}}) }}
++                <p class="muted small">Facultatif. Exemple : près du centre commercial Baobab, portail bleu, appeler en arrivant.</p>
++                {% if form.deliveryInstructions.vars.errors|length > 0 %}
++                  <div class="client-form-errors">{{ form_errors(form.deliveryInstructions) }}</div>
++                {% endif %}
++              </div>
++
+               <div class="client-form-field">
+                 <span class="client-form-label">Position GPS de livraison</span>
+                 <div class="client-form-control" style="height:auto; min-height:44px;">
+@@ -604,6 +621,7 @@
+     const communeInput = form.querySelector('#checkout_commune');
+     const postalInput = form.querySelector('#checkout_postalCode');
+     const zoneInput = form.querySelector('#checkout_zone');
++    const instructionsInput = form.querySelector('#checkout_deliveryInstructions');
+     const gpsLatInput = form.querySelector('#checkout_gpsLatitude');
+     const gpsLngInput = form.querySelector('#checkout_gpsLongitude');
+     const gpsAccuracyInput = form.querySelector('#checkout_gpsAccuracyMeters');
+@@ -611,6 +629,7 @@
+     const addressEl = document.querySelector('[data-delivery-current-address]');
+     const communeEl = document.querySelector('[data-delivery-current-commune]');
+     const zoneEl = document.querySelector('[data-delivery-current-zone]');
++    const instructionsEl = document.querySelector('[data-delivery-current-instructions]');
+     const gpsEl = document.querySelector('[data-delivery-current-gps]');
+ 
+     const communeLabel = communeInput && communeInput.selectedIndex >= 0
+@@ -626,6 +645,10 @@
+       ? ((postalCode ? postalCode + ' ' : '') + (communeLabel || 'Commune à choisir'))
+       : 'Commune à choisir';
+     if (zoneEl) zoneEl.textContent = formatZoneLabel(zone);
++    if (instructionsEl) {
++      const instructions = instructionsInput ? (instructionsInput.value || '').trim() : '';
++      instructionsEl.textContent = instructions ? 'Instructions : ' + instructions : 'Instructions : non renseignées';
++    }
+ 
+     if (gpsEl) {
+       const lat = gpsLatInput ? (gpsLatInput.value || '').trim() : '';
+@@ -854,6 +877,7 @@
+       const addressInput = document.querySelector('#checkout_address');
+       const communeInput = document.querySelector('#checkout_commune');
+       const existingInput = document.querySelector('#checkout_existingAddressId');
++      const instructionsInput = document.querySelector('#checkout_deliveryInstructions');
+ 
+       const gpsLatInput = document.querySelector('#checkout_gpsLatitude');
+       const gpsLngInput = document.querySelector('#checkout_gpsLongitude');
+@@ -862,6 +886,7 @@
+       if(addressInput) addressInput.value = btnAddr.dataset.line1 || '';
+       if(communeInput) communeInput.value = btnAddr.dataset.commune || '';
+       if(existingInput) existingInput.value = btnAddr.dataset.addressId || '';
++      if(instructionsInput) instructionsInput.value = btnAddr.dataset.deliveryInstructions || '';
+       if(gpsLatInput) gpsLatInput.value = btnAddr.dataset.gpsLatitude || '';
+       if(gpsLngInput) gpsLngInput.value = btnAddr.dataset.gpsLongitude || '';
+       if(gpsAccuracyInput) gpsAccuracyInput.value = btnAddr.dataset.gpsAccuracy || '';
+@@ -883,6 +908,7 @@
+       const addressInput = document.querySelector('#checkout_address');
+       const existingInput = document.querySelector('#checkout_existingAddressId');
+       const communeInput = document.querySelector('#checkout_commune');
++      const instructionsInput = document.querySelector('#checkout_deliveryInstructions');
+ 
+       if(existingInput) existingInput.value = '';
+       if(addressInput) {
+@@ -892,6 +918,7 @@
+       if(communeInput) {
+           communeInput.value = '';
+       }
++      if(instructionsInput) instructionsInput.value = '';
+ 
+       const gpsLatInput = document.querySelector('#checkout_gpsLatitude');
+       const gpsLngInput = document.querySelector('#checkout_gpsLongitude');
+diff --git a/templates/courier/dashboard.html.twig b/templates/courier/dashboard.html.twig
+index 30d0109..7b315b2 100644
+--- a/templates/courier/dashboard.html.twig
++++ b/templates/courier/dashboard.html.twig
+@@ -40,8 +40,19 @@
+                     {% if order.deliveryGpsMapUrl %}
+                         <p class="courier-note">GPS : {{ order.deliveryGpsCoordinatesLabel }}</p>
+                     {% endif %}
+-                    {% if order.deliveryAddressNotes %}
+-                        <p class="courier-note">{{ order.deliveryAddressNotes }}</p>
++                    {% if order.deliveryAddressInstructions %}
++                        <p class="courier-note"><strong>Instructions client :</strong><br>{{ order.deliveryAddressInstructions|nl2br }}</p>
++                    {% endif %}
++                    {% if order.deliveryAddressCourierNotes %}
++                        <p class="courier-note courier-note--internal"><strong>Note terrain :</strong><br>{{ order.deliveryAddressCourierNotes|nl2br }}</p>
++                    {% endif %}
++                    {% if order.deliveryAddress %}
++                        <form class="courier-note-form" method="post" action="{{ path('courier_order_address_note', {id: order.id}) }}">
++                            <input type="hidden" name="_token" value="{{ csrf_token('courier_address_note_' ~ order.id) }}">
++                            <label for="courier_note_{{ order.id }}">Commentaire terrain pour les prochaines livraisons</label>
++                            <textarea id="courier_note_{{ order.id }}" name="courier_note" rows="2" placeholder="Ex : portail bleu, maison au fond de la ruelle…">{{ order.deliveryAddressCourierNotes }}</textarea>
++                            <button class="courier-btn courier-btn--light" type="submit">Enregistrer la note</button>
++                        </form>
+                     {% endif %}
+                 {% else %}
+                     <p>Adresse non renseignée.</p>
+@@ -259,6 +270,29 @@
+             background: #f8efe6;
+         }
+ 
++        .courier-note-form {
++            margin-top: .75rem;
++            display: grid;
++            gap: .45rem;
++        }
++
++        .courier-note-form label {
++            font-size: .85rem;
++            font-weight: 800;
++            color: #5f4630;
++        }
++
++        .courier-note-form textarea {
++            width: 100%;
++            min-height: 72px;
++            border: 1px solid #e4cfbb;
++            border-radius: 14px;
++            padding: .65rem .75rem;
++            font: inherit;
++            background: #fffdf9;
++            color: #1f130c;
++        }
++
+         .courier-info-box span,
+         .courier-address strong,
+         .courier-items strong {
+diff --git a/tools/deploy-hodina-by-tag.sh b/tools/deploy-hodina-by-tag.sh
+index bc2305f..85b613f 100644
+--- a/tools/deploy-hodina-by-tag.sh
++++ b/tools/deploy-hodina-by-tag.sh
+@@ -916,6 +916,35 @@ check_optional_j5k_gps_columns() {
+   fi
+ }
+ 
++
++check_optional_j5k_bis_address_columns() {
++  local missing=0
++
++  local checks=(
++    "address:courier_notes"
++    "customer_order:delivery_address_courier_notes"
++  )
++
++  local item
++  for item in "${checks[@]}"; do
++    local table="${item%%:*}"
++    local column="${item##*:}"
++
++    if check_db_column_exists "$table" "$column"; then
++      ok "Colonne J5K-bis détectée : $table.$column"
++    else
++      warn "Colonne J5K-bis absente : $table.$column"
++      missing=1
++    fi
++  done
++
++  if [ "$missing" = "0" ]; then
++    record_ok "J5K-bis adresse enrichie" "commentaire livreur + snapshot commande OK"
++  else
++    record_warn "J5K-bis adresse enrichie" "colonnes absentes, vérifier la migration"
++  fi
++}
++
+ check_optional_public_url() {
+   if [ -z "${PUBLIC_URL:-}" ]; then
+     record_warn "URL publique" "non testée, définir PUBLIC_URL=https://recette.hodina.fr pour automatiser"
+@@ -1023,6 +1052,7 @@ final_deployment_checks() {
+   fi
+ 
+   check_optional_j5k_gps_columns
++  check_optional_j5k_bis_address_columns
+ 
+   if crontab -l 2>/dev/null | grep -Fq "$CRON_LOCK"; then
+     record_ok "Cron Messenger" "$CRON_LOCK présent"

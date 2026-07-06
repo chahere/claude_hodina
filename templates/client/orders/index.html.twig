@@ -1,0 +1,104 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mes commandes – Hodina{% endblock %}
+
+{% block body %}
+<section class="section account-page" data-client-account-page>
+  <div class="container account-container">
+    <div class="account-header">
+      <p class="account-kicker">Mon compte</p>
+      <h1>Mes commandes</h1>
+      <p class="muted">Suis ici l’avancement de tes commandes Hodina.</p>
+    </div>
+
+    {% include 'client/_account_nav.html.twig' %}
+
+    <div class="account-actions account-actions--top">
+      <a class="btn btn-secondary" href="{{ path('product_catalogue') }}">Continuer mes achats</a>
+    </div>
+
+    <div class="account-section">
+      <div class="account-section-head">
+        <h2>En cours</h2>
+        <span class="account-count">{{ activeOrders|length }}</span>
+      </div>
+
+      {% if activeOrders is empty %}
+        <div class="account-empty-card">
+          <strong>Aucune commande en cours.</strong>
+          <p class="muted small">Quand tu valides un panier, ta commande apparaît ici.</p>
+        </div>
+      {% else %}
+        <div class="account-order-list">
+          {% for item in activeOrders %}
+            {% set order = item.order ?? null %}
+            {% if order %}
+              <article class="account-order-card">
+                <div class="account-order-card__head">
+                  <div>
+                    <p class="account-order-reference">Commande {{ item.reference }}</p>
+                    <p class="muted small">{{ order.createdAt|date('d/m/Y à H:i', order.displayTimezone) }}</p>
+                  </div>
+                  <span class="account-status-badge {{ item.statusClass }}">{{ item.statusLabel }}</span>
+                </div>
+
+                <p class="account-next-step">{{ item.nextStep }}</p>
+
+                <div class="account-order-meta">
+                  <span>Livraison : <strong>{{ order.deliveryAddressCommune ?: 'Commune non renseignée' }}</strong></span>
+                  <span>Total : <strong>{{ order.total|number_format(2, ',', ' ') }} €</strong></span>
+                </div>
+
+                <a class="btn btn-primary account-card-btn" href="{{ path('client_orders_show', {id: order.id}) }}">Voir le détail</a>
+              </article>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="account-section">
+      <div class="account-section-head">
+        <h2>Historique</h2>
+        <span class="account-count">{{ historyOrders|length }}</span>
+      </div>
+
+      {% if historyOrders is empty %}
+        <div class="account-empty-card">
+          <strong>Aucune commande terminée.</strong>
+          <p class="muted small">Les commandes livrées ou annulées seront rangées ici.</p>
+        </div>
+      {% else %}
+        <div class="account-order-list">
+          {% for item in historyOrders %}
+            {% set order = item.order ?? null %}
+            {% if order %}
+              <article class="account-order-card account-order-card--history">
+                <div class="account-order-card__head">
+                  <div>
+                    <p class="account-order-reference">Commande {{ item.reference }}</p>
+                    <p class="muted small">{{ order.createdAt|date('d/m/Y à H:i', order.displayTimezone) }}</p>
+                  </div>
+                  <span class="account-status-badge {{ item.statusClass }}">{{ item.statusLabel }}</span>
+                </div>
+
+                <div class="account-order-meta">
+                  <span>Livraison : <strong>{{ order.deliveryAddressCommune ?: 'Commune non renseignée' }}</strong></span>
+                  <span>Total : <strong>{{ order.total|number_format(2, ',', ' ') }} €</strong></span>
+                </div>
+
+                <a class="btn btn-secondary account-card-btn" href="{{ path('client_orders_show', {id: order.id}) }}">Voir le détail</a>
+              </article>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block javascripts %}
+  {{ parent() }}
+  {% include 'client/_account_ajax.html.twig' %}
+{% endblock %}

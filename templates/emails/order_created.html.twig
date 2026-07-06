@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Récapitulatif de commande Hodina</title>
+</head>
+<body style="margin:0;padding:0;background:#f7f7f7;font-family:Arial,sans-serif;color:#222;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f7f7;padding:20px 0;">
+    <tr>
+        <td align="center">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border-radius:12px;overflow:hidden;">
+                <tr>
+                    <td style="padding:24px;">
+                        <h1 style="margin:0 0 8px;font-size:24px;">Hodina</h1>
+                        <p style="margin:0;color:#666;">Votre marché en ligne de produits locaux à Mayotte</p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:0 24px 24px;">
+                        <h2 style="font-size:20px;margin:0 0 12px;">Nous avons bien reçu votre commande</h2>
+
+                        <p style="line-height:1.5;">
+                            {{ emailBranding.opening|default('Bonjour,') }}
+                        </p>
+
+                        <p style="line-height:1.5;">
+                            Ta commande <strong>{{ orderReference }}</strong> a bien été enregistrée.
+                            Elle est maintenant en attente de validation par l’équipe Hodina.
+                        </p>
+
+                        <p style="line-height:1.5;">
+                            Pendant la phase pilote, un administrateur vérifie la disponibilité des produits avant validation.
+                            Le paiement se fera à la livraison.
+                        </p>
+
+                        {% if passwordSetupUrl is defined and passwordSetupUrl %}
+                            <div style="margin:20px 0;padding:16px;border-radius:12px;background:#ecf6f2;border:1px solid #cde9dd;">
+                                <h3 style="font-size:17px;margin:0 0 8px;">Ton espace client Hodina est prêt</h3>
+                                <p style="line-height:1.5;margin:0 0 14px;">
+                                    Nous avons créé ton espace pour suivre cette commande. Définis ton mot de passe avec ce lien sécurisé.
+                                </p>
+                                <p style="margin:0;">
+                                    <a href="{{ passwordSetupUrl }}" style="display:inline-block;padding:12px 16px;border-radius:999px;background:#1f7a5f;color:#ffffff;text-decoration:none;font-weight:bold;">
+                                        Créer mon mot de passe
+                                    </a>
+                                </p>
+                            </div>
+                        {% endif %}
+
+                        {% if attachedToExistingAccount|default(false) %}
+                            <div style="margin:20px 0;padding:16px;border-radius:12px;background:#f2f8ff;border:1px solid #c7dfff;">
+                                <h3 style="font-size:17px;margin:0 0 8px;">Commande rattachée à ton espace client</h3>
+                                <p style="line-height:1.5;margin:0;">
+                                    Cette commande a été rattachée à ton espace client Hodina.<br>
+                                    Tu pourras la retrouver dans ton espace client avec tes autres commandes.
+                                </p>
+                            </div>
+                        {% endif %}
+
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0;border-collapse:collapse;">
+                            <tr>
+                                <td style="padding:8px;border-bottom:1px solid #eee;"><strong>Commande</strong></td>
+                                <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">
+                                    {{ orderReference }}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:8px;border-bottom:1px solid #eee;"><strong>Date</strong></td>
+                                <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">
+                                    {{ order.submittedAt ? order.submittedAt|date('d/m/Y H:i', order.displayTimezone) : '' }}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:8px;border-bottom:1px solid #eee;"><strong>Statut</strong></td>
+                                <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">
+                                    En attente de validation Hodina
+                                </td>
+                            </tr>
+                        </table>
+
+                        <h3 style="font-size:17px;margin:24px 0 12px;">Articles commandés</h3>
+
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                            <thead>
+                            <tr>
+                                <th align="left" style="padding:8px;border-bottom:2px solid #ddd;">Produit</th>
+                                <th align="center" style="padding:8px;border-bottom:2px solid #ddd;">Qté</th>
+                                <th align="right" style="padding:8px;border-bottom:2px solid #ddd;">Prix unitaire</th>
+                                <th align="right" style="padding:8px;border-bottom:2px solid #ddd;">Total</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for item in items|default([]) %}
+                                <tr>
+                                    <td style="padding:8px;border-bottom:1px solid #eee;">
+                                        {{ item.productName }}
+                                    </td>
+                                    <td align="center" style="padding:8px;border-bottom:1px solid #eee;">
+                                        {{ item.quantity }}
+                                    </td>
+                                    <td align="right" style="padding:8px;border-bottom:1px solid #eee;white-space:nowrap;">
+                                        {{ item.unitPrice|number_format(2, ',', ' ') }}&nbsp;€
+                                    </td>
+                                    <td align="right" style="padding:8px;border-bottom:1px solid #eee;white-space:nowrap;">
+                                        {{ item.lineTotal|number_format(2, ',', ' ') }}&nbsp;€
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" style="padding:10px 8px;border-bottom:1px solid #eee;color:#777;">
+                                        Aucun article trouvé dans ce récapitulatif.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+
+                        <h3 style="font-size:17px;margin:24px 0 12px;">Total</h3>
+
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 20px;">
+                            <tr>
+                                <td style="padding:8px;border-bottom:1px solid #eee;">Sous-total produits</td>
+                                <td align="right" style="padding:8px;border-bottom:1px solid #eee;white-space:nowrap;">
+                                    {{ order.subtotal|number_format(2, ',', ' ') }}&nbsp;€
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:8px;border-bottom:1px solid #eee;">Frais de livraison</td>
+                                <td align="right" style="padding:8px;border-bottom:1px solid #eee;white-space:nowrap;">
+                                    {{ order.deliveryFee|number_format(2, ',', ' ') }}&nbsp;€
+                                </td>
+                            </tr>
+                            {% if deliveryFeeReason|default(null) %}
+                                <tr>
+                                    <td colspan="2" style="padding:0 8px 8px;border-bottom:1px solid #eee;color:#666;font-size:13px;line-height:1.35;">
+                                        {{ deliveryFeeReason }}
+                                    </td>
+                                </tr>
+                            {% endif %}
+                            <tr>
+                                <td style="padding:10px 8px;font-size:18px;">
+                                    <strong>Total à régler</strong><br>
+                                    <span style="font-size:13px;font-weight:normal;color:#666;">Paiement à la livraison après validation Hodina.</span>
+                                </td>
+                                <td align="right" style="padding:10px 8px;font-size:18px;white-space:nowrap;">
+                                    <strong>{{ order.total|number_format(2, ',', ' ') }}&nbsp;€</strong>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <h3 style="font-size:17px;margin:24px 0 12px;">Livraison</h3>
+
+                        <p style="line-height:1.5;">
+                            Adresse : {{ order.deliveryAddressLine1 ?: 'Non renseignée' }}<br>
+                            {% if order.deliveryAddressLocalityName %}Localité : {{ order.deliveryAddressLocalityName }}<br>{% endif %}
+                            Commune : {{ order.deliveryAddressCommune ?: 'Non renseignée' }}<br>
+                            Zone : {{ order.deliveryAddressZoneName ?: (order.deliveryZone ? order.deliveryZone.name : 'Non renseignée') }}
+                        </p>
+
+                        <h3 style="font-size:17px;margin:24px 0 12px;">Contact client</h3>
+
+                        <p style="line-height:1.5;">
+                            Téléphone : {{ customer.phone ?: 'Non renseigné' }}<br>
+                            E-mail : {{ customer.email ?: 'Non renseigné' }}
+                        </p>
+
+                        <p style="margin-top:24px;line-height:1.5;color:#555;">
+                            L’équipe Hodina va vérifier la disponibilité des produits auprès des vendeurs.
+                            Tu seras informé de la suite de ta commande.
+                        </p>
+
+                        <p style="margin-top:20px;line-height:1.5;color:#7a5f47;font-size:13px;">
+                            {{ noReplyNotice|default('Merci de ne pas répondre directement à cet e-mail.') }}
+                        </p>
+
+                        <p style="margin-top:24px;">
+                            {{ emailBranding.closing|default('Merci pour ta confiance,') }}<br>
+                            <strong>{{ emailBranding.signature|default('L’équipe Hodina') }}</strong>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

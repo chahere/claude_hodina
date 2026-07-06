@@ -1,0 +1,14 @@
+<h1>Confirmation de ton e-mail Hodina</h1>
+
+<p>{{ emailBranding.opening|default('Bonjour,') }}</p>
+
+<p>
+    Please confirm your email address by clicking the following link: <br><br>
+    <a href="{{ signedUrl|raw }}">Confirm my Email</a>.
+    This link will expire in {{ expiresAtMessageKey|trans(expiresAtMessageData, 'VerifyEmailBundle') }}.
+</p>
+
+<p>
+    {{ emailBranding.closing|default('Merci,') }}<br>
+    {{ emailBranding.signature|default('L’équipe Hodina') }}
+</p>

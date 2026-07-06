@@ -1,0 +1,148 @@
+--- /mnt/data/j5k_devops_gps_columns_fix/tools/deploy-hodina-by-tag.sh	2026-06-19 09:58:41.375493282 +0000
++++ /mnt/data/j5k_devops_gps_columns_pdo_fix/tools/deploy-hodina-by-tag.sh	2026-06-19 10:13:43.082258179 +0000
+@@ -881,7 +881,144 @@
+   local table="$1"
+   local column="$2"
+ 
+-  "$PHP_BIN" bin/console --env=prod dbal:run-sql "SHOW COLUMNS FROM \`$table\` LIKE '$column';" 2>/dev/null | grep -Fq "$column"
++  # Controle robuste via PDO et INFORMATION_SCHEMA.
++  # Raison : dbal:run-sql / SHOW COLUMNS peut varier selon les versions Symfony/Doctrine
++  # et provoquer de faux WARN dans le resume final alors que doctrine:schema:validate est OK.
++  "$PHP_BIN" - "$table" "$column" <<'PHP' >/dev/null 2>/dev/null
++<?php
++
++$table = $argv[1] ?? '';
++$column = $argv[2] ?? '';
++
++if ($table === '' || $column === '') {
++    exit(2);
++}
++
++function normalizeEnvValue(string $value): string
++{
++    $value = trim($value);
++
++    if (
++        (str_starts_with($value, '"') && str_ends_with($value, '"'))
++        || (str_starts_with($value, "'") && str_ends_with($value, "'"))
++    ) {
++        $value = substr($value, 1, -1);
++    }
++
++    return $value;
++}
++
++function readDatabaseUrlFromFile(string $file): ?string
++{
++    if (!is_file($file) || !is_readable($file)) {
++        return null;
++    }
++
++    $lines = file($file, FILE_IGNORE_NEW_LINES);
++    if ($lines === false) {
++        return null;
++    }
++
++    foreach ($lines as $line) {
++        $line = trim($line);
++
++        if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
++            continue;
++        }
++
++        [$key, $value] = explode('=', $line, 2);
++        if (trim($key) !== 'DATABASE_URL') {
++            continue;
++        }
++
++        return normalizeEnvValue($value);
++    }
++
++    return null;
++}
++
++$candidates = [];
++$envDatabaseUrl = getenv('DATABASE_URL') ?: '';
++if ($envDatabaseUrl !== '') {
++    $candidates[] = normalizeEnvValue($envDatabaseUrl);
++}
++
++foreach (['.env.local', '.env.prod.local', '.env.prod', '.env', 'prod.env.local'] as $file) {
++    $value = readDatabaseUrlFromFile($file);
++    if ($value !== null && $value !== '') {
++        $candidates[] = $value;
++    }
++}
++
++$databaseUrl = null;
++$parts = null;
++
++foreach ($candidates as $candidate) {
++    $parsed = parse_url($candidate);
++    if ($parsed === false) {
++        continue;
++    }
++
++    $scheme = $parsed['scheme'] ?? '';
++    if (!in_array($scheme, ['mysql', 'mariadb'], true)) {
++        continue;
++    }
++
++    $dbName = isset($parsed['path']) ? ltrim(rawurldecode($parsed['path']), '/') : '';
++    $user = isset($parsed['user']) ? rawurldecode($parsed['user']) : '';
++
++    if ($dbName === '' || $user === '') {
++        continue;
++    }
++
++    $databaseUrl = $candidate;
++    $parts = $parsed;
++    break;
++}
++
++if ($databaseUrl === null || $parts === null) {
++    exit(3);
++}
++
++$user = isset($parts['user']) ? rawurldecode($parts['user']) : '';
++$password = isset($parts['pass']) ? rawurldecode($parts['pass']) : '';
++$host = isset($parts['host']) ? rawurldecode($parts['host']) : 'localhost';
++$port = isset($parts['port']) ? (string) $parts['port'] : '';
++$dbName = isset($parts['path']) ? ltrim(rawurldecode($parts['path']), '/') : '';
++
++$query = [];
++if (isset($parts['query'])) {
++    parse_str($parts['query'], $query);
++}
++$socket = isset($query['unix_socket']) ? (string) $query['unix_socket'] : '';
++
++$dsnParts = ['dbname='.$dbName, 'charset=utf8mb4'];
++if ($socket !== '') {
++    $dsnParts[] = 'unix_socket='.$socket;
++} else {
++    $dsnParts[] = 'host='.$host;
++    if ($port !== '') {
++        $dsnParts[] = 'port='.$port;
++    }
++}
++
++try {
++    $pdo = new PDO('mysql:'.implode(';', $dsnParts), $user, $password, [
++        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
++        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
++    ]);
++
++    $stmt = $pdo->prepare(
++        'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?'
++    );
++    $stmt->execute([$table, $column]);
++
++    $exists = ((int) $stmt->fetchColumn()) > 0;
++    exit($exists ? 0 : 1);
++} catch (Throwable $e) {
++    exit(4);
++}
++PHP
+ }
+ 
+ check_optional_j5k_gps_columns() {

@@ -1,0 +1,16 @@
+{% extends '@EasyAdmin/crud/field/collection.html.twig' %}
+
+{% block field_widget %}
+  {#
+    Wrapper stable pour l'aperçu des images produit dans les formulaires EasyAdmin.
+    Le calcul de l'aperçu reste volontairement côté JS pour rester compatible
+    avec le HTML interne du widget upload EasyAdmin.
+  #}
+  <div
+    class="hodina-product-images-preview"
+    data-controller="product-images"
+    data-product-images-base-path-value="/uploads/products/"
+  >
+    {{ parent() }}
+  </div>
+{% endblock %}

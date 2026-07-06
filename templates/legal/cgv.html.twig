@@ -1,0 +1,117 @@
+{% extends 'legal/_legal_layout.html.twig' %}
+
+{% block title %}Conditions générales de vente – Hodina{% endblock %}
+
+{% block legal_body %}
+    <div class="legal-kicker">Document légal client</div>
+    <h1>Conditions générales de vente</h1>
+    <p class="legal-updated">Clients de la plateforme Hodina — Dernière mise à jour : {{ 'now'|date('d/m/Y') }}</p>
+
+    <div class="legal-warning">
+        Pendant la phase pilote, le paiement peut être traité manuellement après validation admin. Les commandes restent soumises à confirmation de disponibilité par Hodina et/ou les vendeurs.
+    </div>
+
+    <nav class="legal-toc" aria-label="Sommaire CGV">
+        {% for i in 1..14 %}
+            <a href="#article-{{ i }}">Article {{ i }}</a>
+        {% endfor %}
+    </nav>
+
+    <section class="legal-section" id="article-1">
+        <h2>Article 1 – Objet</h2>
+        <p>Les présentes Conditions Générales de Vente, ci-après les « CGV », régissent les relations contractuelles entre les Clients et les vendeurs professionnels ou particuliers proposant leurs produits via la plateforme Hodina.</p>
+        <p>Hodina agit exclusivement en qualité d’intermédiaire technique et logistique et n’est pas partie au contrat de vente conclu entre le Client et le Vendeur.</p>
+    </section>
+
+    <section class="legal-section" id="article-2">
+        <h2>Article 2 – Produits proposés</h2>
+        <p>Les produits proposés à la vente sont décrits et présentés par chaque Vendeur sous sa responsabilité.</p>
+        <p>Les produits peuvent inclure notamment des produits alimentaires, des produits artisanaux, des produits fabriqués sur commande ou en précommande.</p>
+        <p>Les photographies, descriptions et caractéristiques sont fournies à titre indicatif.</p>
+    </section>
+
+    <section class="legal-section" id="article-3">
+        <h2>Article 3 – Disponibilité des produits</h2>
+        <p>La disponibilité des produits dépend des stocks ou des capacités de production des Vendeurs.</p>
+        <p>En cas d’indisponibilité après commande, le Client sera informé dans les meilleurs délais et pourra obtenir un remboursement ou une solution équivalente conformément aux présentes CGV et aux modalités du pilote.</p>
+    </section>
+
+    <section class="legal-section" id="article-4">
+        <h2>Article 4 – Prix</h2>
+        <p>Les prix des produits sont indiqués en euros, toutes taxes comprises lorsque la réglementation l’exige.</p>
+        <p>Les frais de livraison sont indiqués séparément avant validation définitive de la commande lorsqu’ils sont applicables.</p>
+        <p>Le Vendeur est seul responsable de la fixation du prix de ses produits.</p>
+    </section>
+
+    <section class="legal-section" id="article-5">
+        <h2>Article 5 – Commande</h2>
+        <p>Toute commande passée sur la plateforme implique l’acceptation pleine et entière des présentes CGV.</p>
+        <p>Le processus de commande comprend la sélection des produits, la validation du panier, la saisie des informations de livraison, l’acceptation des CGV et la confirmation de commande.</p>
+        <p>Pendant le pilote, la commande peut être soumise à une validation admin avant confirmation définitive de disponibilité et de livraison.</p>
+        <p>En cas de commande multi-vendeurs, plusieurs contrats de vente distincts peuvent être conclus.</p>
+    </section>
+
+    <section class="legal-section" id="article-6">
+        <h2>Article 6 – Paiement</h2>
+        <p>Le paiement est effectué selon les modalités proposées sur la plateforme ou communiquées par Hodina pendant la phase pilote.</p>
+        <p>Pendant le pilote, le paiement peut être réalisé manuellement, notamment après validation de la commande par l’admin.</p>
+        <p>À terme, Hodina pourra proposer des solutions de paiement sécurisé en ligne.</p>
+    </section>
+
+    <section class="legal-section" id="article-7">
+        <h2>Article 7 – Livraison</h2>
+        <p>La livraison est organisée conformément aux modalités définies par Hodina et le Vendeur.</p>
+        <p>Les délais de livraison sont indicatifs et peuvent varier en fonction de la localisation géographique, du type de produit, de la disponibilité des vendeurs et des contraintes logistiques locales.</p>
+        <p>En cas d’absence du Client lors de la livraison, des frais supplémentaires peuvent être appliqués.</p>
+    </section>
+
+    <section class="legal-section" id="article-8">
+        <h2>Article 8 – Réception des produits</h2>
+        <p>Le Client est tenu de vérifier l’état des produits lors de la réception.</p>
+        <p>Toute anomalie, notamment produit manquant, détérioré ou non conforme, doit être signalée dans un délai de 24 heures.</p>
+    </section>
+
+    <section class="legal-section" id="article-9">
+        <h2>Article 9 – Droit de rétractation</h2>
+        <p>Conformément à la réglementation en vigueur, le Client dispose d’un délai de rétractation de 14 jours, sauf exceptions légales.</p>
+        <p>Le droit de rétractation ne s’applique notamment pas aux produits alimentaires, aux produits personnalisés ou fabriqués sur commande, ni aux produits périssables.</p>
+    </section>
+
+    <section class="legal-section" id="article-10">
+        <h2>Article 10 – Retours et remboursements</h2>
+        <p>Les conditions de retour et de remboursement sont définies par le Vendeur, dans le respect de la réglementation applicable.</p>
+        <p>Hodina peut intervenir en tant que médiateur en cas de litige.</p>
+    </section>
+
+    <section class="legal-section" id="article-11">
+        <h2>Article 11 – Responsabilité</h2>
+        <p>Le Vendeur est seul responsable de la conformité des produits, de leur qualité et de leur sécurité.</p>
+        <p>Hodina ne saurait être tenue responsable des dommages résultant de l’utilisation des produits.</p>
+    </section>
+
+    <section class="legal-section" id="article-12">
+        <h2>Article 12 – Force majeure</h2>
+        <p>Aucune des parties ne pourra être tenue responsable en cas de force majeure au sens de la loi.</p>
+    </section>
+
+    <section class="legal-section" id="article-13">
+        <h2>Article 13 – Données personnelles</h2>
+        <p>Les données personnelles sont traitées conformément à la politique de protection des données de Hodina.</p>
+    </section>
+
+    <section class="legal-section" id="article-14">
+        <h2>Article 14 – Droit applicable et litiges</h2>
+        <p>Les présentes CGV sont soumises au droit français.</p>
+        <p>En cas de litige, une solution amiable sera recherchée en priorité. À défaut, les tribunaux compétents seront ceux du ressort du siège social de Hodina.</p>
+    </section>
+
+    <section class="legal-section">
+        <h2>Acceptation</h2>
+        <p>La validation de toute commande sur la plateforme Hodina vaut acceptation pleine et entière des présentes Conditions Générales de Vente.</p>
+    </section>
+
+    <div class="legal-actions">
+        <a class="btn btn-primary" href="{{ path('product_catalogue') }}">Retour au catalogue</a>
+        <a class="btn btn-secondary" href="{{ path('app_cgu') }}">Voir les CGU</a>
+    </div>
+{% endblock %}

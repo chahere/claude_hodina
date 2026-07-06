@@ -1,0 +1,115 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}
+    Supprimer un utilisateur pilote
+{% endblock %}
+
+{% block main %}
+    <style>
+        .hodina-delete-card {
+            max-width: 820px;
+            border: 1px solid rgba(239, 68, 68, .35);
+            border-radius: 22px;
+            padding: 1.4rem;
+            background: var(--body-bg, #fff);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+        }
+
+        .hodina-danger-box {
+            border-radius: 16px;
+            padding: 1rem;
+            background: rgba(239, 68, 68, .12);
+            border: 1px solid rgba(239, 68, 68, .35);
+            margin: 1rem 0;
+        }
+
+        .hodina-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: .75rem;
+            margin: 1rem 0;
+        }
+
+        .hodina-summary-item {
+            border: 1px solid rgba(148, 163, 184, .35);
+            border-radius: 16px;
+            padding: 1rem;
+        }
+
+        .hodina-summary-number {
+            display: block;
+            font-size: 2rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .hodina-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            margin-top: 1.25rem;
+        }
+
+        .hodina-actions .btn {
+            border-radius: 14px;
+            padding: .75rem 1rem;
+            font-weight: 800;
+        }
+    </style>
+
+    <div class="hodina-delete-card">
+        <p class="text-muted mb-2">Action réservée aux tests de la phase pilote.</p>
+
+        <h2 class="h4 mb-3">Utilisateur concerné</h2>
+        <dl class="row">
+            <dt class="col-sm-4">ID</dt>
+            <dd class="col-sm-8">#{{ customer.id }}</dd>
+
+            <dt class="col-sm-4">Nom</dt>
+            <dd class="col-sm-8">{{ customer.firstName }} {{ customer.lastName }}</dd>
+
+            <dt class="col-sm-4">Email</dt>
+            <dd class="col-sm-8">{{ customer.email ?: 'Non renseigné' }}</dd>
+
+            <dt class="col-sm-4">Téléphone</dt>
+            <dd class="col-sm-8">{{ customer.phone ?: 'Non renseigné' }}</dd>
+        </dl>
+
+        <div class="hodina-danger-box">
+            <strong>Suppression physique en cascade.</strong>
+            <p class="mb-0 mt-2">
+                Cette action supprime définitivement l’utilisateur, ses commandes, les lignes de commande,
+                les SMS logs liés aux commandes et ses adresses de livraison. Elle est volontairement prévue
+                uniquement pour nettoyer les tests du pilote.
+            </p>
+        </div>
+
+        <h3 class="h5">Éléments qui seront supprimés</h3>
+        <div class="hodina-summary-grid">
+            <div class="hodina-summary-item">
+                <span class="hodina-summary-number">{{ preview.orders }}</span>
+                commande(s)
+            </div>
+            <div class="hodina-summary-item">
+                <span class="hodina-summary-number">{{ preview.smsLogs }}</span>
+                SMS log(s)
+            </div>
+            <div class="hodina-summary-item">
+                <span class="hodina-summary-number">{{ preview.addresses }}</span>
+                adresse(s)
+            </div>
+        </div>
+
+        <form method="post" class="hodina-actions">
+            <input type="hidden" name="_token" value="{{ csrf_token('pilot_delete_customer_' ~ customer.id) }}">
+
+            <button type="submit" class="btn btn-danger">
+                Confirmer la suppression pilote
+            </button>
+
+            <a href="{{ cancelUrl }}" class="btn btn-secondary">
+                Annuler
+            </a>
+        </form>
+    </div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}
+    {{ successMessage }}
+{% endblock %}
+
+{% block main %}
+    <div class="content-panel">
+        <div class="content-panel-body with-background without-header without-footer">
+            <div class="alert {{ smsLog.status == constant('App\\Entity\\SmsLog::STATUS_SENT') ? 'alert-success' : 'alert-warning' }}">
+                <strong>{{ successMessage }}</strong><br>
+                {% if smsLog.status == constant('App\\Entity\\SmsLog::STATUS_SENT') %}
+                    SMS log créé. Clique sur "Envoyer SMS" pour ouvrir l’application Messages avec le numéro et le message préremplis.
+                {% else %}
+                    Statut modifié, mais le SMS log n’a pas pu être créé : {{ smsLog.errorMessage ?: 'erreur inconnue' }}.
+                {% endif %}
+            </div>
+
+            <dl class="row">
+                <dt class="col-sm-3">Commande</dt>
+                <dd class="col-sm-9">{{ order.orderReference ?: 'Commande #' ~ order.id }}</dd>
+
+                <dt class="col-sm-3">Téléphone</dt>
+                <dd class="col-sm-9">{{ phone ?: '-' }}</dd>
+
+                <dt class="col-sm-3">Message</dt>
+                <dd class="col-sm-9">{{ message }}</dd>
+            </dl>
+
+            <div class="d-flex flex-wrap gap-2 mt-4">
+                {% if smsUrl %}
+                    <a class="btn btn-primary" id="open_sms_app" href="{{ smsUrl }}">Envoyer SMS</a>
+                {% endif %}
+                <a class="btn btn-secondary" href="{{ urls.detail }}">Retour commande</a>
+                <a class="btn btn-light" href="{{ urls.sheet }}">Fiche terrain</a>
+                <a class="btn btn-link" href="{{ urls.index }}">Retour aux commandes</a>
+            </div>
+
+            {% if smsUrl %}
+                <p class="text-muted mt-3 mb-0">
+                    Pour le pilote, l’ouverture de Messages se fait volontairement par clic manuel afin de garder le contrôle avant l’envoi réel.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

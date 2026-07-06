@@ -1,0 +1,175 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Découvrir Hodina — Marketplace locale de Mayotte{% endblock %}
+
+{% block body %}
+<section class="hero discover-hero">
+    <div class="container">
+        <h1>Découvrir Hodina, le marché local en ligne de Mayotte</h1>
+        <p class="hero-sub">
+            Hodina aide les habitants de Mayotte à trouver, commander et recevoir
+            des produits locaux plus simplement, tout en gardant le lien avec les vendeurs du territoire.
+        </p>
+
+        <div class="hero-actions discover-hero-actions">
+            <a href="{{ path('product_catalogue') }}" class="btn btn-primary">Voir le catalogue</a>
+            <a href="#rejoindre-hodina" class="btn btn-secondary">Rejoindre Hodina</a>
+        </div>
+
+        <div class="hero-points discover-audience-grid">
+            <a class="point discover-audience-card" href="#clients">
+                <div class="point-title">🛒 Pour les clients</div>
+                <div class="point-sub">Trouver des produits locaux, commander simplement et suivre les étapes.</div>
+            </a>
+            <a class="point discover-audience-card" href="#vendeurs">
+                <div class="point-title">🌿 Pour les vendeurs</div>
+                <div class="point-sub">Être visible en ligne, garder ses prix et vendre à son rythme.</div>
+            </a>
+            <a class="point discover-audience-card" href="#livreurs">
+                <div class="point-title">🛵 Pour les livreurs</div>
+                <div class="point-sub">Préparer les tournées avec des informations utiles et simples à suivre.</div>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section benefits discover-section" id="clients">
+    <div class="container">
+        <p class="discover-kicker">Côté client</p>
+        <h2>Commander local sans chercher partout</h2>
+        <p class="muted discover-intro">
+            À Mayotte, on sait souvent qu’un produit existe, mais pas toujours où le trouver,
+            s’il est disponible, ni comment le récupérer. Hodina rassemble les produits dans un catalogue clair,
+            puis organise la commande étape par étape.
+        </p>
+
+        <ul class="checklist discover-checklist">
+            <li>Catalogue mobile-first avec recherche, catégories et prix visibles.</li>
+            <li>Panier guidé selon l’adresse, la commune ou le point de remise choisi.</li>
+            <li>Créneaux de remise lisibles pour les produits sur rendez-vous.</li>
+            <li>Paiement manuel pendant le pilote, pour garder un lancement simple et maîtrisé.</li>
+        </ul>
+    </div>
+</section>
+
+<section class="section how discover-section" id="vendeurs">
+    <div class="container">
+        <p class="discover-kicker">Côté vendeur</p>
+        <h2>Vendre en ligne sans perdre le contrôle</h2>
+        <p class="muted discover-intro">
+            Hodina n’est pas là pour remplacer le vendeur. Le but est de l’aider à être visible,
+            recevoir des commandes plus structurées et préparer la collecte avec moins d’improvisation.
+        </p>
+
+        <ol class="steps">
+            <li>
+                <span class="step-num">1</span>
+                <div class="step-content">
+                    <div class="step-title">On cadre vos produits</div>
+                    <div class="step-sub">Nom, prix, stock, photos, catégorie, commune de retrait et consignes utiles.</div>
+                </div>
+            </li>
+            <li>
+                <span class="step-num">2</span>
+                <div class="step-content">
+                    <div class="step-title">Le client commande</div>
+                    <div class="step-sub">Hodina traite votre commande avec un suivi étape par étape.</div>
+                </div>
+            </li>
+            <li>
+                <span class="step-num">3</span>
+                <div class="step-content">
+                    <div class="step-title">La collecte est préparée</div>
+                    <div class="step-sub">Le livreur voit l’adresse de retrait, les produits à récupérer et les consignes terrain.</div>
+                </div>
+            </li>
+            <li>
+                <span class="step-num">4</span>
+                <div class="step-content">
+                    <div class="step-title">Vous gardez votre rythme</div>
+                    <div class="step-sub">Vous fixez vos prix, vos disponibilités et les produits que vous voulez mettre en avant.</div>
+                </div>
+            </li>
+        </ol>
+    </div>
+</section>
+
+<section class="section discover-section" id="livreurs">
+    <div class="container">
+        <p class="discover-kicker">Côté livreur</p>
+        <h2>Livraison : mieux préparer les tournées</h2>
+        <p class="muted discover-intro">
+            La livraison à Mayotte demande de la précision : communes, points de retrait,
+            consignes, GPS et disponibilité réelle des produits. Hodina avance progressivement
+            pour donner aux livreurs les informations utiles au bon moment.
+        </p>
+
+        <div class="discover-card-grid">
+            <article class="discover-card">
+                <h3>Collecte vendeur</h3>
+                <p>Voir où récupérer les produits, qui appeler et quelles consignes respecter.</p>
+            </article>
+            <article class="discover-card">
+                <h3>Livraison client</h3>
+                <p>Adresse, commune client, téléphone, position GPS et notes utiles pour trouver plus vite.</p>
+            </article>
+            <article class="discover-card">
+                <h3>Suivi simple</h3>
+                <p>Prendre en charge, démarrer la livraison, marquer livré : peu d’actions, mais les bonnes.</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<section class="section demo discover-section" id="histoires-produits">
+    <div class="container">
+        <p class="discover-kicker">Le Carnet Hodina</p>
+        <h2>Des repères utiles pour mieux commander local à Mayotte</h2>
+        <p class="muted">
+            Le Carnet Hodina complète le catalogue avec des explications simples : livraison, saisonnalité,
+            portraits de vendeurs et coulisses terrain. On commence avec une page pédagogique sur la livraison,
+            parce que c’est un sujet central pour commander en confiance à Mayotte.
+        </p>
+
+        <div class="discover-card-grid discover-card-grid--editorial">
+            <a class="discover-card discover-audience-card" href="{{ path('app_carnet_livraison') }}">
+                <h3>Livraison Hodina</h3>
+                <p>Comprendre les communes concernées, les jours indicatifs, les points de remise et le rôle du panier.</p>
+            </a>
+            <article class="discover-card">
+                <h3>Fruits, légumes et saisons</h3>
+                <p>À venir : présenter les produits locaux, leur saison, leurs usages et les vendeurs qui les font vivre.</p>
+            </article>
+            <article class="discover-card">
+                <h3>Nos vendeurs et producteurs partenaires</h3>
+                <p>À venir : raconter les personnes, les lieux et les savoir-faire derrière les produits Hodina.</p>
+            </article>
+        </div>
+
+        <div class="demo-actions">
+            <a href="{{ path('app_carnet') }}" class="btn btn-primary">Ouvrir le Carnet Hodina</a>
+            <a href="{{ path('product_catalogue') }}" class="btn btn-secondary">Voir le catalogue</a>
+        </div>
+    </div>
+</section>
+
+<section id="devenir-vendeur" class="section cta discover-cta">
+    <div class="container">
+        <h2>Rejoindre Hodina</h2>
+        <p class="muted">
+            Vous êtes vendeur local, producteur, artisan, futur livreur ou simplement intéressé par Hodina ?
+            <br>Écrivez-nous, on vous répondra simplement.
+        </p>
+
+        <div class="cta-actions">
+            <a class="btn btn-primary" href="https://wa.me/33699807927" target="_blank" rel="noopener noreferrer">
+                Contacter Hodina sur WhatsApp
+            </a>
+
+            <a class="btn btn-secondary" href="{{ path('product_catalogue') }}">
+                Voir les produits disponibles
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}

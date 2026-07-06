@@ -1,0 +1,33 @@
+{% set salesOpening = hodina_commerce_state() %}
+<div class="catalogue-results-header">
+    <div>
+        <strong>{{ resultCount }}</strong> {{ resultCount > 1 ? 'produits trouvés' : 'produit trouvé' }}
+        {% if selectedCategory %}
+            <span class="muted">dans {{ selectedCategory.name }}</span>
+        {% endif %}
+        {% if currentSearch %}
+            <span class="muted">pour “{{ currentSearch }}”</span>
+        {% endif %}
+    </div>
+    <span class="catalogue-sort-current">{{ currentSort ? sortChoices[currentSort] : 'Ordre Hodina' }}</span>
+</div>
+
+{% if selectedCategory and selectedCategory.publicDescription %}
+    <div class="catalogue-category-description">
+        {{ selectedCategory.publicDescription }}
+    </div>
+{% endif %}
+
+{% if products is empty %}
+    <div class="empty-state catalogue-empty-state">
+        <p><strong>Aucun produit trouvé</strong></p>
+        <p class="muted">Essaie une autre recherche ou enlève le filtre catégorie.</p>
+        <a class="btn btn-primary" href="{{ path('product_catalogue') }}">Voir tout le catalogue</a>
+    </div>
+{% else %}
+    <div class="product-grid">
+        {% for product in products %}
+            {% include 'product/_catalogue_product_card.html.twig' with { product: product, prices: prices, salesOpening: salesOpening } only %}
+        {% endfor %}
+    </div>
+{% endif %}

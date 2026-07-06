@@ -1,0 +1,85 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Mon compte – Hodina{% endblock %}
+
+{% block body %}
+<section class="section account-page" data-client-account-page>
+  <div class="container account-container">
+    <div class="account-header">
+      <p class="account-kicker">Mon compte</p>
+      <h1>Bonjour {{ customer.firstName }}</h1>
+      <p class="muted">Retrouve tes commandes, tes informations et la sécurité de ton compte Hodina.</p>
+    </div>
+
+    {% include 'client/_account_nav.html.twig' %}
+
+    <div class="account-dashboard-grid">
+      <article class="account-card account-dashboard-card">
+        <div class="account-dashboard-card__head">
+          <div>
+            <p class="account-kicker">Commandes</p>
+            <h2>Suivi client</h2>
+          </div>
+          <span class="account-count">{{ activeOrderCount }}</span>
+        </div>
+        <p class="muted small">{{ activeOrderCount }} commande{{ activeOrderCount > 1 ? 's' : '' }} en cours · {{ historyOrderCount }} dans l’historique.</p>
+
+        {% if activeOrders is not empty %}
+          <div class="account-mini-list">
+            {% for item in activeOrders %}
+              {% set order = item.order ?? null %}
+              {% if order %}
+                <a href="{{ path('client_orders_show', {id: order.id}) }}" class="account-mini-row">
+                  <span>
+                    <strong>{{ item.reference }}</strong>
+                    <small>{{ item.statusLabel }}</small>
+                  </span>
+                  <span>{{ order.total|number_format(2, ',', ' ') }} €</span>
+                </a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="account-empty-inline">Aucune commande en cours.</p>
+        {% endif %}
+
+        <a class="btn btn-primary account-card-btn" href="{{ path('client_orders_index') }}">Voir mes commandes</a>
+      </article>
+
+      <article class="account-card account-dashboard-card">
+        <p class="account-kicker">Informations</p>
+        <h2>Profil client</h2>
+        <dl class="account-profile-summary">
+          <div>
+            <dt>Nom</dt>
+            <dd>{{ customer.firstName }} {{ customer.lastName ?: '' }}</dd>
+          </div>
+          <div>
+            <dt>Téléphone</dt>
+            <dd>{{ customer.phone }}</dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd>{{ customer.email ?: 'Non renseigné' }}</dd>
+          </div>
+        </dl>
+        <a class="btn btn-secondary account-card-btn" href="{{ path('client_profile_edit') }}">Modifier mes informations</a>
+      </article>
+
+      <article class="account-card account-dashboard-card account-security-card">
+        <p class="account-kicker">Sécurité</p>
+        <h2>Mot de passe</h2>
+        <p class="muted small">Change ton mot de passe avec l’ancien mot de passe, ou demande un nouveau lien de réinitialisation.</p>
+        <div class="account-dashboard-actions">
+          <a class="btn btn-primary" href="{{ path('client_security_password') }}">Modifier mon mot de passe</a>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block javascripts %}
+  {{ parent() }}
+  {% include 'client/_account_ajax.html.twig' %}
+{% endblock %}

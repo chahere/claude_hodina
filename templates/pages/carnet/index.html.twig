@@ -1,0 +1,75 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Le Carnet Hodina — Guides pratiques et histoires locales{% endblock %}
+
+{% block body %}
+<section class="hero carnet-hero">
+    <div class="container">
+        <p class="discover-kicker">Le Carnet Hodina</p>
+        <h1>Comprendre les produits, la livraison et les personnes derrière Hodina</h1>
+        <p class="hero-sub">
+            Le Carnet Hodina rassemble les repères utiles pour commander local avec confiance à Mayotte :
+            fonctionnement des livraisons, saisonnalité des produits, portraits de vendeurs et coulisses terrain.
+        </p>
+
+        <div class="hero-actions discover-hero-actions">
+            <a href="{{ path('app_carnet_livraison') }}" class="btn btn-primary">Lire le guide livraison</a>
+            <a href="{{ path('product_catalogue') }}" class="btn btn-secondary">Voir le catalogue</a>
+        </div>
+    </div>
+</section>
+
+<section class="section carnet-section">
+    <div class="container">
+        <p class="discover-kicker">Pourquoi cette rubrique existe</p>
+        <h2>Rendre le fonctionnement de Hodina plus clair, sans jargon</h2>
+        <p class="muted discover-intro">
+            À Mayotte, acheter local dépend souvent de l’information terrain : où trouver le produit,
+            quand il est disponible, comment se passe la livraison et qui prépare la commande.
+            Le Carnet Hodina sert à expliquer ces sujets simplement, avec des contenus utiles plutôt qu’un blog généraliste.
+        </p>
+
+        <div class="carnet-card-grid">
+            <a class="carnet-card carnet-card--active" href="{{ path('app_carnet_livraison') }}">
+                <span class="carnet-card__status">Disponible</span>
+                <h3>Livraison Hodina</h3>
+                <p>
+                    Comprendre les zones, les jours indicatifs, les points de remise et la manière dont Hodina calcule
+                    les informations au panier.
+                </p>
+                <span class="carnet-card__link">Lire la page livraison</span>
+            </a>
+
+            <article class="carnet-card carnet-card--disabled" aria-disabled="true">
+                <span class="carnet-card__status">À venir</span>
+                <h3>Fruits, légumes et saisons</h3>
+                <p>
+                    Présenter les produits locaux, leur saisonnalité, leurs usages et les idées simples pour les cuisiner.
+                </p>
+            </article>
+
+            <article class="carnet-card carnet-card--disabled" aria-disabled="true">
+                <span class="carnet-card__status">À venir</span>
+                <h3>Nos vendeurs et producteurs partenaires</h3>
+                <p>
+                    Mettre en avant les personnes, les lieux de production et les savoir-faire qui font vivre Hodina.
+                </p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<section class="section cta discover-cta">
+    <div class="container">
+        <h2>Besoin de vérifier une livraison ?</h2>
+        <p class="muted">
+            Les informations du Carnet donnent des repères. Les frais, dates et créneaux exacts sont confirmés
+            dans le panier selon l’adresse, les produits choisis et l’organisation réelle du moment.
+        </p>
+        <div class="cta-actions">
+            <a class="btn btn-primary" href="{{ path('product_catalogue') }}">Commencer par le catalogue</a>
+            <a class="btn btn-secondary" href="{{ path('app_discover_hodina') }}">Découvrir Hodina</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

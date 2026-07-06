@@ -1,0 +1,21 @@
+[07-Feb-2026 08:21:18 UTC] PHP Warning:  require_once(/home/vopu3712/hodina.fr/vendor/autoload_runtime.php): Failed to open stream: No such file or directory in /home/vopu3712/hodina.fr/public/index.php on line 5
+[07-Feb-2026 08:21:18 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '/home/vopu3712/hodina.fr/vendor/autoload_runtime.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home/vopu3712/hodina.fr/public/index.php:5
+Stack trace:
+#0 {main}
+  thrown in /home/vopu3712/hodina.fr/public/index.php on line 5
+[07-Feb-2026 08:33:46 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.4.0". You are running 8.3.30. in /home/vopu3712/hodina.fr/vendor/composer/platform_check.php:22
+Stack trace:
+#0 /home/vopu3712/hodina.fr/vendor/composer/autoload_real.php(25): require()
+#1 /home/vopu3712/hodina.fr/vendor/autoload.php(22): ComposerAutoloaderInitba014e9c4906296635e4c4d1083a34da::getLoader()
+#2 /home/vopu3712/hodina.fr/vendor/autoload_runtime.php(5): require_once('/home/vopu3712/...')
+#3 /home/vopu3712/hodina.fr/public/index.php(5): require_once('/home/vopu3712/...')
+#4 {main}
+  thrown in /home/vopu3712/hodina.fr/vendor/composer/platform_check.php on line 22
+[07-Feb-2026 08:33:46 UTC] PHP Fatal error:  Uncaught RuntimeException: Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.4.0". You are running 8.3.30. in /home/vopu3712/hodina.fr/vendor/composer/platform_check.php:22
+Stack trace:
+#0 /home/vopu3712/hodina.fr/vendor/composer/autoload_real.php(25): require()
+#1 /home/vopu3712/hodina.fr/vendor/autoload.php(22): ComposerAutoloaderInitba014e9c4906296635e4c4d1083a34da::getLoader()
+#2 /home/vopu3712/hodina.fr/vendor/autoload_runtime.php(5): require_once('/home/vopu3712/...')
+#3 /home/vopu3712/hodina.fr/public/index.php(5): require_once('/home/vopu3712/...')
+#4 {main}
+  thrown in /home/vopu3712/hodina.fr/vendor/composer/platform_check.php on line 22

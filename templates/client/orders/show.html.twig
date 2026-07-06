@@ -1,0 +1,196 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Commande {{ orderView.reference }} – Hodina{% endblock %}
+
+{% block body %}
+<section class="section account-page" data-client-account-page>
+  <div class="container account-container">
+    <div class="account-back-row">
+      <a href="{{ path('client_orders_index') }}">← Mes commandes</a>
+    </div>
+
+    {% include 'client/_account_nav.html.twig' %}
+
+    <article class="account-card account-order-detail">
+      <div class="account-order-card__head">
+        <div>
+          <p class="account-kicker">Commande</p>
+          <h1>{{ orderView.reference }}</h1>
+          <p class="muted small">Créée le {{ order.createdAt|date('d/m/Y à H:i', order.displayTimezone) }}</p>
+        </div>
+        <span class="account-status-badge {{ orderView.statusClass }}">{{ orderView.statusLabel }}</span>
+      </div>
+
+      <div class="account-next-step account-next-step--detail">
+        {{ orderView.nextStep }}
+      </div>
+
+      <div class="summary-row">
+        <span class="muted">Paiement</span>
+        <strong>Manuel pendant le pilote</strong>
+      </div>
+      <div class="summary-row">
+        <span class="muted">Commune client</span>
+        <strong>{{ order.deliveryAddressCommune ?: 'Non renseignée' }}</strong>
+      </div>
+      <div class="summary-row summary-total">
+        <span>Total commande</span>
+        <strong>{{ order.total|number_format(2, ',', ' ') }} €</strong>
+      </div>
+    </article>
+
+    {% if orderView.canCancel %}
+      <article class="account-card account-cancel-card">
+        <h2>Besoin d’annuler ?</h2>
+        <p class="muted small">Tu peux annuler cette commande tant qu’elle n’est pas en préparation.</p>
+
+        <form method="post" action="{{ path('client_orders_cancel', {id: order.id}) }}" class="account-cancel-form" data-client-account-form="cancel-order" data-confirm-message="Tu veux vraiment annuler cette commande ? Cette action est définitive.">
+          <input type="hidden" name="_token" value="{{ csrf_token('client_cancel_order_' ~ order.id) }}">
+
+          <label for="cancel-reason" class="account-form-label">Pourquoi veux-tu annuler ?</label>
+          <select id="cancel-reason" name="reason" class="account-select">
+            <option value="">Choisir une raison facultative</option>
+            {% for key, label in cancellationReasons %}
+              <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+
+          <label for="cancel-comment" class="account-form-label">Commentaire facultatif</label>
+          <textarea id="cancel-comment" name="comment" class="account-textarea" rows="3" placeholder="Exemple : je ne serai finalement pas disponible au créneau prévu."></textarea>
+
+          <button type="submit" class="btn account-danger-btn">Annuler ma commande</button>
+        </form>
+      </article>
+    {% elseif order.status != constant('App\\Entity\\CustomerOrder::STATUS_CANCELED') and order.status != constant('App\\Entity\\CustomerOrder::STATUS_DELIVERED') %}
+      <article class="account-card account-info-card">
+        <strong>Annulation directe indisponible</strong>
+        <p class="muted small">La préparation est déjà engagée. Contacte Hodina rapidement si tu as un problème avec cette commande.</p>
+      </article>
+    {% endif %}
+
+    <article class="account-card">
+      <h2>Produits</h2>
+      {% if order.items is not empty %}
+        <div class="account-items-list">
+          {% for item in order.items %}
+            <div class="account-item-row">
+              <div>
+                <strong>{{ item.product.name }}</strong>
+                <p class="muted small">Vendeur : {{ item.seller.publicDisplayName }}<br>{{ item.quantity }} × {{ item.unitPrice|number_format(2, ',', ' ') }} €</p>
+              </div>
+              <strong>{{ item.lineTotal|number_format(2, ',', ' ') }} €</strong>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted small">Aucune ligne de commande enregistrée.</p>
+      {% endif %}
+
+      <div class="account-totals">
+        <div class="summary-row">
+          <span class="muted">Total produits</span>
+          <strong>{{ order.subtotal|number_format(2, ',', ' ') }} €</strong>
+        </div>
+        <div class="summary-row">
+          <span class="muted">Frais de livraison</span>
+          <strong>{{ order.deliveryFee|number_format(2, ',', ' ') }} €</strong>
+        </div>
+        {% set logistics_preview = order.deliveryLogisticsSnapshot.preview|default(null) %}
+        {% set logistics_fee_reasons = [] %}
+        {% set logistics_land_hops = logistics_preview ? logistics_preview.landHopCount|default(0) : 0 %}
+        {% if logistics_land_hops > 0 %}
+          {% set logistics_fee_reasons = logistics_fee_reasons|merge([logistics_land_hops ~ ' commune' ~ (logistics_land_hops > 1 ? 's' : '') ~ ' traversée' ~ (logistics_land_hops > 1 ? 's' : '')]) %}
+        {% elseif logistics_preview and logistics_preview.collectionPointCount|default(0) > 1 %}
+          {% set logistics_fee_reasons = logistics_fee_reasons|merge(['plusieurs communes de collecte']) %}
+        {% endif %}
+        {% if logistics_preview and (logistics_preview.requiresBarge|default(false) or logistics_preview.bargeHopCount|default(0) > 0) %}
+          {% set logistics_fee_reasons = logistics_fee_reasons|merge(['barge']) %}
+        {% endif %}
+        {% if logistics_fee_reasons is not empty %}
+          <p class="cart-logistics-fee-note">Inclus : {{ logistics_fee_reasons|join(' + ') }}.</p>
+        {% endif %}
+        <div class="summary-row summary-total">
+          <span>Total</span>
+          <strong>{{ order.total|number_format(2, ',', ' ') }} €</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="account-card account-address-card">
+      {% if order.hasDeliveryPoint %}
+        <h2>Point de remise utilisé</h2>
+        <p class="account-address-summary">{{ order.deliveryPointSummary }}</p>
+        {% if order.deliveryPointAppointmentSummary %}
+          <p class="muted small">Rendez-vous : <strong>{{ order.deliveryPointAppointmentSummary }}</strong></p>
+        {% endif %}
+        {% if order.deliveryPointTimeWindowSummary %}
+          <p class="muted small">Plage indicative : <strong>{{ order.deliveryPointTimeWindowSummary }}</strong></p>
+        {% endif %}
+        {% if order.deliveryPointCustomerInstructions %}
+          <div class="account-note-box">
+            <strong>Précision client</strong>
+            <p>{{ order.deliveryPointCustomerInstructions }}</p>
+          </div>
+        {% endif %}
+      {% else %}
+        <h2>Adresse de livraison utilisée</h2>
+        <p class="account-address-summary">{{ order.deliveryAddressSummary }}</p>
+      {% endif %}
+
+      {% if order.deliveryAddressZoneName or order.deliveryAddressZoneCode %}
+        <p class="muted small">Zone : {{ order.deliveryAddressZoneName ?? order.deliveryAddressZoneCode }}</p>
+      {% endif %}
+
+      {% if order.deliveryAddressNotes %}
+        <div class="account-note-box">
+          <strong>Consignes client</strong>
+          <p>{{ order.deliveryAddressNotes }}</p>
+        </div>
+      {% endif %}
+
+      {% set point_map_url = order.deliveryPointGpsMapUrl %}
+      {% if point_map_url or order.deliveryGpsMapUrl %}
+        <div class="account-note-box">
+          <strong>GPS livraison</strong>
+          {% if not point_map_url %}<p class="muted small">{{ order.deliveryGpsCoordinatesLabel }}</p>{% endif %}
+          <a href="{{ point_map_url ?: order.deliveryGpsMapUrl }}" target="_blank" rel="noopener" class="btn btn-secondary account-card-btn">Ouvrir la carte</a>
+        </div>
+      {% else %}
+        <p class="muted small">GPS non renseigné pour cette commande.</p>
+      {% endif %}
+    </article>
+
+    <article class="account-card">
+      <h2>Code de réception</h2>
+      {% if order.deliveryValidationCodeSentAt %}
+        <p class="muted">Code envoyé le {{ order.deliveryValidationCodeSentAt|date('d/m/Y à H:i', order.displayTimezone) }} par SMS/e-mail.</p>
+        <p class="small">Donne ce code au livreur uniquement quand tu as bien reçu ta commande.</p>
+      {% else %}
+        <p class="muted">Le code de réception sera envoyé quand la livraison sera prête à démarrer.</p>
+      {% endif %}
+    </article>
+
+    <article class="account-card">
+      <h2>Étapes</h2>
+      <ol class="account-timeline">
+        {% for step in timeline %}
+          <li class="{{ step.done ? 'is-done' : '' }}">
+            <span class="account-timeline-dot"></span>
+            <div>
+              <strong>{{ step.label }}</strong>
+              {% if step.date %}
+                <p class="muted small">{{ step.date|date('d/m/Y à H:i', order.displayTimezone) }}</p>
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      </ol>
+    </article>
+  </div>
+</section>
+{% endblock %}
+
+{% block javascripts %}
+  {{ parent() }}
+  {% include 'client/_account_ajax.html.twig' %}
+{% endblock %}

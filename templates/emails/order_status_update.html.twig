@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }} - Hodina</title>
+</head>
+<body style="margin:0;padding:0;background:#f7f7f7;font-family:Arial,sans-serif;color:#24170f;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f7f7;padding:20px 0;">
+    <tr>
+        <td align="center">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border-radius:12px;overflow:hidden;">
+                <tr>
+                    <td style="padding:24px 24px 12px;">
+                        <h1 style="margin:0;font-size:24px;">Hodina</h1>
+                        <p style="margin:6px 0 0;color:#6b5b4b;">Suivi de ta commande</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:12px 24px 28px;">
+                        <p style="line-height:1.5;">{{ emailBranding.opening|default('Bonjour,') }}</p>
+
+                        <h2 style="font-size:20px;margin:0 0 12px;">{{ title }}</h2>
+
+                        <p style="line-height:1.5;">{{ message }}</p>
+
+                        {% if details %}
+                            <p style="line-height:1.5;color:#5c5148;">{{ details }}</p>
+                        {% endif %}
+
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0;border-collapse:collapse;">
+                            <tr>
+                                <td style="padding:8px;border-bottom:1px solid #eee;"><strong>Commande</strong></td>
+                                <td align="right" style="padding:8px;border-bottom:1px solid #eee;">{{ orderReference }}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:8px;border-bottom:1px solid #eee;"><strong>Total</strong></td>
+                                <td align="right" style="padding:8px;border-bottom:1px solid #eee;white-space:nowrap;">{{ order.total|number_format(2, ',', ' ') }}&nbsp;€</td>
+                            </tr>
+                            <tr>
+                                <td style="padding:8px;border-bottom:1px solid #eee;"><strong>Commune</strong></td>
+                                <td align="right" style="padding:8px;border-bottom:1px solid #eee;">{{ order.deliveryAddressCommune ?: 'À confirmer' }}</td>
+                            </tr>
+                        </table>
+
+                        <p style="line-height:1.5;color:#7a5f47;font-size:13px;">{{ noReplyNotice|default('Merci de ne pas répondre directement à cet e-mail.') }}</p>
+
+                        <p style="line-height:1.5;">{{ emailBranding.closing|default('Merci,') }}<br><strong>{{ emailBranding.signature|default('L’équipe Hodina') }}</strong></p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

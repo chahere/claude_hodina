@@ -1,0 +1,263 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Connexion client — Hodina{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        .login-page {
+            min-height: calc(100vh - 180px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 16px;
+            background:
+                radial-gradient(circle at top left, rgba(134, 90, 45, 0.16), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(33, 115, 70, 0.12), transparent 32%);
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 460px;
+            background: #fffaf4;
+            border: 1px solid rgba(96, 62, 30, 0.14);
+            border-radius: 24px;
+            box-shadow: 0 18px 50px rgba(41, 25, 12, 0.12);
+            padding: 28px;
+        }
+
+        .login-eyebrow {
+            margin: 0 0 8px;
+            color: #8a5a2b;
+            font-size: 0.82rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .login-title {
+            margin: 0;
+            color: #2b190d;
+            font-size: clamp(1.7rem, 6vw, 2.25rem);
+            line-height: 1.05;
+        }
+
+        .login-subtitle {
+            margin: 12px 0 24px;
+            color: #6e5a47;
+            line-height: 1.45;
+        }
+
+        .login-alert {
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #fff0f0;
+            color: #9f1d1d;
+            border: 1px solid rgba(159, 29, 29, 0.18);
+            font-weight: 700;
+        }
+
+        .login-connected {
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #eef8f1;
+            color: #215f36;
+            border: 1px solid rgba(33, 95, 54, 0.16);
+        }
+
+        .login-success {
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #eef8f1;
+            color: #215f36;
+            border: 1px solid rgba(33, 95, 54, 0.16);
+            font-weight: 700;
+        }
+
+        .login-field {
+            margin-bottom: 16px;
+        }
+
+        .login-label {
+            display: block;
+            margin-bottom: 7px;
+            color: #2b190d;
+            font-weight: 800;
+        }
+
+        .login-input {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid rgba(96, 62, 30, 0.22);
+            border-radius: 14px;
+            padding: 13px 14px;
+            font-size: 1rem;
+            background: #fff;
+            color: #2b190d;
+        }
+
+        .login-input:focus {
+            outline: none;
+            border-color: #8a5a2b;
+            box-shadow: 0 0 0 4px rgba(138, 90, 43, 0.14);
+        }
+
+        .login-actions {
+            display: grid;
+            gap: 12px;
+            margin-top: 22px;
+        }
+
+        .login-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            border-radius: 999px;
+            padding: 12px 18px;
+            font-weight: 900;
+            text-decoration: none;
+            border: 1px solid transparent;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .login-btn-primary {
+            background: #2f7d4f;
+            color: #fff;
+            box-shadow: 0 10px 22px rgba(47, 125, 79, 0.22);
+        }
+
+        .login-btn-secondary {
+            background: #fff;
+            color: #2b190d;
+            border-color: rgba(96, 62, 30, 0.22);
+        }
+
+        .login-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 22px 0 12px;
+            color: #8b7a6b;
+            font-size: 0.9rem;
+        }
+
+        .login-divider::before,
+        .login-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(96, 62, 30, 0.16);
+        }
+
+        .login-help {
+            margin: 16px 0 0;
+            text-align: center;
+            color: #6e5a47;
+            font-size: 0.94rem;
+        }
+
+        .login-help a {
+            color: #8a5a2b;
+            font-weight: 800;
+        }
+
+        @media (max-width: 520px) {
+            .login-page {
+                align-items: flex-start;
+                padding: 20px 12px 28px;
+            }
+
+            .login-card {
+                padding: 22px;
+                border-radius: 20px;
+            }
+        }
+    </style>
+{% endblock %}
+
+{% block body %}
+    <section class="login-page">
+        <div class="login-card">
+            <p class="login-eyebrow">Espace client Hodina</p>
+            <h1 class="login-title">Connexion</h1>
+            <p class="login-subtitle">
+                Connecte-toi pour valider ton panier, suivre tes commandes et retrouver tes informations de livraison.
+            </p>
+
+            {% if error %}
+                <div class="login-alert" role="alert">
+                    Identifiants incorrects. Vérifie ton email et ton mot de passe.
+                </div>
+            {% endif %}
+
+            {% for message in app.flashes('success') %}
+                <div class="login-success" role="status">{{ message }}</div>
+            {% endfor %}
+
+            {% if app.user %}
+                <div class="login-connected">
+                    Tu es connecté avec {{ app.user.userIdentifier }}.
+                    <a href="{{ path('app_logout') }}">Se déconnecter</a>
+                </div>
+            {% endif %}
+
+            <form method="post" action="{{ path('app_login') }}">
+                <div class="login-field">
+                    <label class="login-label" for="username">Adresse email</label>
+                    <input
+                        type="email"
+                        value="{{ last_username }}"
+                        name="_username"
+                        id="username"
+                        class="login-input"
+                        autocomplete="email"
+                        placeholder="exemple@email.com"
+                        required
+                        autofocus
+                    >
+                </div>
+
+                <div class="login-field">
+                    <label class="login-label" for="password">Mot de passe</label>
+                    <input
+                        type="password"
+                        name="_password"
+                        id="password"
+                        class="login-input"
+                        autocomplete="current-password"
+                        placeholder="Ton mot de passe"
+                        required
+                    >
+                </div>
+
+                <p class="login-help" style="text-align:left; margin-top:-4px;">
+                    <a href="{{ path('app_forgot_password_request') }}">Mot de passe oublié ?</a>
+                </p>
+
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+
+                <div class="login-actions">
+                    <button class="login-btn login-btn-primary" type="submit">
+                        Se connecter
+                    </button>
+                </div>
+            </form>
+
+            <div class="login-divider">ou</div>
+
+            <a class="login-btn login-btn-secondary" href="{{ path('app_register') }}">
+                Créer mon compte Hodina
+            </a>
+
+            <p class="login-help">
+                Tu veux juste regarder les produits ?
+                <a href="{{ path('product_catalogue') }}">Retour au catalogue</a>
+            </p>
+        </div>
+    </section>
+{% endblock %}

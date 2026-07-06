@@ -1,0 +1,68 @@
+<article class="product-card{% if product.isFeatured %} product-card--featured{% endif %}">
+    <a class="product-link" href="{{ path('product_show', { slug: product.slug }) }}">
+        <div class="product-media">
+            {% set imgUrl = null %}
+
+            {% if product.images is defined and product.images|length > 0 %}
+                {% set firstImg = product.images|first %}
+                {% set imgUrl = asset('uploads/products/' ~ firstImg.path) %}
+            {% endif %}
+
+            {% if imgUrl %}
+                <img src="{{ imgUrl }}" alt="{{ product.name }}" loading="lazy">
+            {% else %}
+                <div class="product-placeholder" aria-hidden="true">
+                    <span>🛍️</span>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="product-info">
+            <div class="product-top">
+                <div class="product-title-line">
+                    <h2 class="product-name">{{ product.name }}</h2>
+                    {% if product.isFeatured %}
+                        <span class="product-featured-badge">Mis en avant</span>
+                    {% endif %}
+                </div>
+
+                <div class="product-meta">
+                    <span class="meta-item">
+                        <span class="meta-label">Vendeur :</span>
+                        <span class="meta-value">{{ product.seller.publicDisplayName }}</span>
+                    </span>
+
+                    <span class="meta-item">
+                        <span class="meta-label">Catégorie :</span>
+                        <span class="meta-value">{{ product.category.name }}</span>
+                    </span>
+
+                    <span class="meta-item">
+                        <span class="meta-label">Unité :</span>
+                        <span class="meta-value">{{ product.unitLabel }}</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="product-bottom">
+                <div class="product-price">
+                    {{ (prices[product.id] ?? product.price)|number_format(2, ',', ' ') }} <span class="currency">€</span>
+                    <span class="product-price-unit">{{ product.unitLabel|lower }}</span>
+                </div>
+
+                <div class="product-cta">
+                    <span class="cta-pill">Voir le produit</span>
+                </div>
+            </div>
+        </div>
+    </a>
+
+    <div class="product-card-actions">
+        <form method="post" action="{{ path('cart_add', {id: product.id}) }}" data-ajax-cart-form>
+            <input type="hidden" name="qty" value="1">
+            <button class="btn btn-primary btn-add-cart" type="submit" {% if not product.isActive or salesOpening.isCartLocked %}disabled{% endif %}>
+                {{ salesOpening.isCartLocked ? 'Commandes suspendues' : 'Ajouter au panier' }}
+            </button>
+        </form>
+    </div>
+</article>

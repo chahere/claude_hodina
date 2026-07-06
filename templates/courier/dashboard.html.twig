@@ -1,0 +1,1420 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Dashboard livreur — Hodina{% endblock %}
+
+{% block body %}
+    {% macro alert_badges(alerts) %}
+        {% if alerts is not empty %}
+            <div class="courier-alert-badges">
+                {% for alert in alerts %}
+                    <span class="courier-alert-badge courier-alert-badge--{{ alert.level|default('info') }}" title="{{ alert.description|default('') }}">
+                        {{ alert.label }}
+                    </span>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endmacro %}
+
+    {% macro seller_collection(card) %}
+        {% set order = card.order %}
+
+        {% if card.sellerCollectionGroups is empty %}
+            <span class="courier-muted">Collecte vendeur à confirmer</span>
+        {% else %}
+            <div class="courier-collection-progress">
+                {{ card.sellerCollectionProgress.collected }}/{{ card.sellerCollectionProgress.total }} vendeur{{ card.sellerCollectionProgress.total > 1 ? 's' : '' }} collecté{{ card.sellerCollectionProgress.collected > 1 ? 's' : '' }}
+            </div>
+
+            <div class="courier-collection-list">
+                {% for group in card.sellerCollectionGroups %}
+                    <div class="courier-collection-seller {{ group.isCollected ? 'courier-collection-seller--done' : '' }}">
+                        <div class="courier-collection-title">
+                            <strong>
+                                {{ group.name }}{% if group.commune %} — {{ group.commune }}{% endif %}
+                            </strong>
+                            {% if group.isCollected %}
+                                <span class="courier-collection-badge">Collecté{% if group.collectedAtLabel %} · {{ group.collectedAtLabel }}{% endif %}</span>
+                            {% else %}
+                                <span class="courier-collection-badge courier-collection-badge--pending">À collecter</span>
+                            {% endif %}
+                        </div>
+
+                        {{ _self.alert_badges(group.alerts|default([])) }}
+
+                        {% if group.sanitizedPhone or group.email %}
+                            <div class="courier-seller-contact">
+                                {% if group.sanitizedPhone %}
+                                    <a class="courier-inline-link" href="tel:{{ group.sanitizedPhone }}">Appeler vendeur</a>
+                                {% endif %}
+                                {% if group.email %}
+                                    <a class="courier-inline-link" href="mailto:{{ group.email }}">E-mail vendeur</a>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+
+                        {% if group.pickupLogisticsMismatch %}
+                            <p class="courier-collection-warning">Point de retrait : {{ group.pickupCommune }} · Commune logistique : {{ group.logisticsCommune }}</p>
+                        {% endif %}
+
+                        {% if group.pickupAddressSummary %}
+                            <p class="courier-collection-address"><span>Point de retrait</span>{{ group.pickupAddressSummary|nl2br }}</p>
+                        {% else %}
+                            <p class="courier-muted">Adresse de retrait à préciser.</p>
+                        {% endif %}
+
+                        {% if group.pickupGpsMapUrl %}
+                            <a class="courier-inline-link" href="{{ group.pickupGpsMapUrl }}" target="_blank" rel="noopener">Ouvrir le point de retrait</a>
+                            {% if group.pickupGpsCoordinatesLabel %}
+                                <small>{{ group.pickupGpsCoordinatesLabel }}</small>
+                            {% endif %}
+                        {% endif %}
+
+                        {% if group.pickupInstructions %}
+                            <p class="courier-collection-note">{{ group.pickupInstructions|nl2br }}</p>
+                        {% endif %}
+
+                        {% if group.collectionNote %}
+                            <p class="courier-collection-note courier-collection-note--saved">Note collecte : {{ group.collectionNote|nl2br }}</p>
+                        {% endif %}
+
+                        {% if group.items is not empty %}
+                            <ul class="courier-sellers">
+                                {% for line in group.items %}
+                                    <li>{{ line.name }} × {{ line.quantity }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+
+                        {% if not group.isCollected %}
+                            <div class="courier-collection-code-info">
+                                {% if group.hasDefaultCollectionCode %}
+                                    <span>Code vendeur configuré : demande-le au vendeur au moment du retrait.</span>
+                                {% elseif group.collectionCodeSentAtLabel %}
+                                    <span>Code ponctuel envoyé au vendeur · {{ group.collectionCodeSentAtLabel }}</span>
+                                {% else %}
+                                    <span>Aucun code fixe configuré : le premier clic sans code envoie un code au vendeur.</span>
+                                {% endif %}
+                                {% if group.collectionFailedAttempts > 0 %}
+                                    <small>{{ group.collectionFailedAttempts }} tentative{{ group.collectionFailedAttempts > 1 ? 's' : '' }} incorrecte{{ group.collectionFailedAttempts > 1 ? 's' : '' }}.</small>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+
+                        {% if card.canCollectSellers and not group.isCollected and group.sellerId %}
+                            <form class="courier-collection-form" method="post" action="{{ path('courier_order_seller_collection_validate', {orderId: order.id, sellerId: group.sellerId}) }}" data-djama-ajax="true" data-turbo="false">
+                                <input type="hidden" name="_token" value="{{ csrf_token('courier_collect_seller_' ~ order.id ~ '_' ~ group.sellerId) }}">
+                                <label for="collection-code-{{ order.id }}-{{ group.sellerId }}">Code donné par le vendeur</label>
+                                <input id="collection-code-{{ order.id }}-{{ group.sellerId }}" name="collection_code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Ex : 123456">
+                                <label for="collection-note-{{ order.id }}-{{ group.sellerId }}">Note collecte optionnelle</label>
+                                <textarea id="collection-note-{{ order.id }}-{{ group.sellerId }}" name="collection_note" rows="2" placeholder="Ex : vendeur absent, produit remplacé, sac déjà prêt..."></textarea>
+                                <button class="courier-btn courier-btn--collect" type="submit">Valider la collecte</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endmacro %}
+
+    {% macro card_shell(card, statusLabel, modifier, content) %}
+        <details class="courier-card {{ modifier }}" data-djama-order-id="{{ card.order.id }}">
+            <summary class="courier-card__summary">
+                <strong class="courier-card__summary-line">{{ card.summaryLine }}</strong>
+                <span class="courier-card__toggle" aria-hidden="true"></span>
+            </summary>
+
+            <div class="courier-card__content">
+                <div class="courier-card__topline">
+                    <p class="courier-kicker">{{ statusLabel }}</p>
+                    <strong>{{ card.label }}</strong>
+                </div>
+
+                {{ content|raw }}
+            </div>
+        </details>
+    {% endmacro %}
+
+    {% macro terrain_details(card, allowNote) %}
+        {% set order = card.order %}
+        <div class="courier-terrain">
+            <div class="courier-info-block">
+                <span>Client</span>
+                <strong>{{ card.customerLabel }}</strong>
+            </div>
+
+            {{ _self.alert_badges(card.terrainAlerts|default([])) }}
+
+            <div class="courier-info-block">
+                <span>Gain livreur</span>
+                <strong>{{ card.courierPayout|number_format(2, ',', ' ') }} €</strong>
+                {% if card.courierPayoutCapApplied and card.courierPayoutUncapped %}
+                    <small>Plafond appliqué · brut {{ card.courierPayoutUncapped|number_format(2, ',', ' ') }} €</small>
+                {% endif %}
+            </div>
+
+            <div class="courier-info-block">
+                <span>Total commande</span>
+                <strong>{{ card.total|number_format(2, ',', ' ') }} €</strong>
+            </div>
+
+            <div class="courier-info-block courier-info-block--wide">
+                <span>{{ card.deliveryPointSummary ? 'Point de remise client' : 'Adresse' }}</span>
+                <p>{{ (card.deliveryPointSummary ?: card.deliveryAddressSummary)|nl2br }}</p>
+                {% if card.deliveryPointAppointmentSummary %}
+                    <small>Rendez-vous client : {{ card.deliveryPointAppointmentSummary }}</small>
+                {% endif %}
+                {% if card.deliveryPointTimeWindowSummary %}
+                    <small>Plage indicative : {{ card.deliveryPointTimeWindowSummary }}</small>
+                {% endif %}
+                {% if card.deliveryPointCustomerInstructions %}
+                    <small>Précision client : {{ card.deliveryPointCustomerInstructions }}</small>
+                {% endif %}
+                {% if card.deliveryPointPublicInstructions %}
+                    <small>{{ card.deliveryPointPublicInstructions }}</small>
+                {% endif %}
+            </div>
+
+            <div class="courier-info-block courier-info-block--wide">
+                <span>GPS livraison</span>
+                {% if card.gpsMapUrl %}
+                    <a class="courier-inline-link" href="{{ card.gpsMapUrl }}" target="_blank" rel="noopener">Ouvrir la position</a>
+                    {% if card.gpsCoordinatesLabel %}
+                        <small>{{ card.gpsCoordinatesLabel }}</small>
+                    {% endif %}
+                {% else %}
+                    <em>Non renseigné</em>
+                {% endif %}
+            </div>
+
+            {% if card.deliveryInstructions %}
+                <div class="courier-info-block courier-info-block--wide">
+                    <span>Instructions client</span>
+                    <p>{{ card.deliveryInstructions|nl2br }}</p>
+                </div>
+            {% endif %}
+
+            {% if allowNote and card.canEditAddressNote %}
+                <form class="courier-note-form" method="post" action="{{ path('courier_order_address_note', {id: order.id}) }}" data-djama-ajax="true" data-turbo="false">
+                    <input type="hidden" name="_token" value="{{ csrf_token('courier_address_note_' ~ order.id) }}">
+                    <label for="courier-note-{{ order.id }}">Commentaire terrain</label>
+                    <textarea id="courier-note-{{ order.id }}" name="courier_note" rows="2" placeholder="Ex : portail bleu, maison au fond de la ruelle...">{{ card.courierNotes }}</textarea>
+                    <button class="courier-btn courier-btn--note" type="submit">Enregistrer la note</button>
+                </form>
+            {% elseif card.courierNotes %}
+                <div class="courier-info-block courier-info-block--wide">
+                    <span>Commentaire terrain</span>
+                    <p>{{ card.courierNotes|nl2br }}</p>
+                </div>
+            {% endif %}
+        </div>
+    {% endmacro %}
+
+    {% macro execution_details(card) %}
+        <div class="courier-seller-block">
+            <span>Collecte vendeurs</span>
+            {{ _self.seller_collection(card) }}
+        </div>
+    {% endmacro %}
+
+    {% macro available_card(card) %}
+        {% set order = card.order %}
+        {% set content %}
+            {{ _self.terrain_details(card, true) }}
+            {{ _self.execution_details(card) }}
+
+            <div class="courier-actions-title">Actions</div>
+
+            <form method="post" action="{{ path('courier_order_take', {id: order.id}) }}" data-djama-ajax="true" data-turbo="false">
+                <input type="hidden" name="_token" value="{{ csrf_token('courier_take_' ~ order.id) }}">
+                <button class="courier-btn courier-btn--primary" type="submit">Prendre en charge</button>
+            </form>
+        {% endset %}
+
+        {{ _self.card_shell(card, 'À prendre', 'courier-card--available', content) }}
+    {% endmacro %}
+
+    {% macro active_card(card) %}
+        {% set order = card.order %}
+        {% set sms_url = card.sanitizedPhone ? 'sms:' ~ card.sanitizedPhone ~ '&body=' ~ card.smsMessage|url_encode : '' %}
+        {% set statusLabel = card.isPickedUp ? 'Prise en charge' : 'En cours de livraison' %}
+        {% set content %}
+            {{ _self.terrain_details(card, true) }}
+            {{ _self.execution_details(card) }}
+
+            {% if card.isPickedUp %}
+                {% if card.allSellerCollectionsDone %}
+                    <div class="courier-status-note courier-status-note--ready">Toutes les collectes vendeur sont validées. Tu peux démarrer la livraison client.</div>
+                {% else %}
+                    <div class="courier-status-note">Collecte en cours : {{ card.sellerCollectionProgress.collected }}/{{ card.sellerCollectionProgress.total }} vendeur{{ card.sellerCollectionProgress.total > 1 ? 's' : '' }} collecté{{ card.sellerCollectionProgress.collected > 1 ? 's' : '' }}.</div>
+                {% endif %}
+            {% endif %}
+
+            <div class="courier-actions-title">Actions</div>
+
+            <div class="courier-actions">
+                {% if card.sanitizedPhone %}
+                    <a class="courier-btn courier-btn--light" href="tel:{{ card.sanitizedPhone }}">Appeler</a>
+                    <a class="courier-btn courier-btn--light" href="{{ sms_url }}">SMS client</a>
+                {% endif %}
+
+                {% if card.isPickedUp %}
+                    {% if card.allSellerCollectionsDone %}
+                        <form method="post" action="{{ path('courier_order_start_delivery', {id: order.id}) }}" data-djama-ajax="true" data-turbo="false">
+                            <input type="hidden" name="_token" value="{{ csrf_token('courier_start_delivery_' ~ order.id) }}">
+                            <button class="courier-btn courier-btn--primary" type="submit">Démarrer la livraison</button>
+                        </form>
+                    {% else %}
+                        <button class="courier-btn courier-btn--primary courier-btn--disabled" type="button" disabled>Collecte vendeur obligatoire</button>
+                    {% endif %}
+                {% elseif card.isOutForDelivery %}
+                    <div class="courier-delivery-code-info">
+                        {% if card.deliveryCodeSentAtLabel %}
+                            <span>Code réception envoyé au client · {{ card.deliveryCodeSentAtLabel }}</span>
+                            {% if card.deliveryCodeSendCount > 1 %}
+                                <small>Renvoyé {{ card.deliveryCodeSendCount }} fois.</small>
+                            {% endif %}
+                        {% else %}
+                            <span>Le code réception sera envoyé au client au premier clic sans code.</span>
+                        {% endif %}
+                        {% if card.deliveryCodeFailedAttempts > 0 %}
+                            <small>{{ card.deliveryCodeFailedAttempts }} tentative{{ card.deliveryCodeFailedAttempts > 1 ? 's' : '' }} incorrecte{{ card.deliveryCodeFailedAttempts > 1 ? 's' : '' }}.</small>
+                        {% endif %}
+                    </div>
+                    <form class="courier-delivery-code-form" method="post" action="{{ path('courier_order_delivered', {id: order.id}) }}" data-djama-ajax="true" data-turbo="false">
+                        <input type="hidden" name="_token" value="{{ csrf_token('courier_deliver_' ~ order.id) }}">
+                        <label for="delivery-code-{{ order.id }}">Code donné par le client</label>
+                        <input id="delivery-code-{{ order.id }}" name="delivery_code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="Ex : 123456">
+                        <small>Laisse le champ vide puis valide pour renvoyer le même code au client.</small>
+                        <button class="courier-btn courier-btn--success" type="submit">Valider la livraison</button>
+                    </form>
+                {% endif %}
+            </div>
+        {% endset %}
+
+        {{ _self.card_shell(card, statusLabel, card.isPickedUp ? 'courier-card--picked' : 'courier-card--out', content) }}
+    {% endmacro %}
+
+    {% macro delivered_card(card) %}
+        {% set content %}
+            {{ _self.execution_details(card) }}
+        {% endset %}
+
+        {{ _self.card_shell(card, 'Livrée', 'courier-card--delivered', content) }}
+    {% endmacro %}
+
+    {% macro payout_card(card, modifier) %}
+        <details class="courier-card courier-card--payout {{ modifier }}" data-djama-payout-id="{{ card.id }}">
+            <summary class="courier-card__summary">
+                <strong class="courier-card__summary-line">{{ card.summaryLine }}</strong>
+                <span class="courier-card__toggle" aria-hidden="true"></span>
+            </summary>
+
+            <div class="courier-card__content">
+                <div class="courier-card__topline">
+                    <p class="courier-kicker">{{ card.statusLabel }}</p>
+                    <strong>{{ card.totalAmount|number_format(2, ',', ' ') }} €</strong>
+                </div>
+
+                <div class="courier-payout-meta">
+                    <div class="courier-info-block">
+                        <span>Période</span>
+                        <strong>{{ card.periodLabel }}</strong>
+                    </div>
+                    <div class="courier-info-block">
+                        <span>Paiement prévu</span>
+                        <strong>{{ card.paymentDueLabel }}</strong>
+                    </div>
+                    {% if card.paidAtLabel %}
+                        <div class="courier-info-block">
+                            <span>Payé le</span>
+                            <strong>{{ card.paidAtLabel }}</strong>
+                        </div>
+                    {% endif %}
+                    {% if card.paymentReference %}
+                        <div class="courier-info-block courier-info-block--wide">
+                            <span>Référence paiement</span>
+                            <strong>{{ card.paymentReference }}</strong>
+                        </div>
+                    {% endif %}
+                    {% if card.paymentMethod %}
+                        <div class="courier-info-block courier-info-block--wide">
+                            <span>Mode paiement</span>
+                            <strong>{{ card.paymentMethod }}</strong>
+                        </div>
+                    {% endif %}
+                    {% if card.adminNote %}
+                        <div class="courier-info-block courier-info-block--wide">
+                            <span>Note Hodina</span>
+                            <p>{{ card.adminNote|nl2br }}</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                {% if card.lines is empty %}
+                    <div class="courier-empty courier-empty--small">Aucune commande rattachée à ce paiement.</div>
+                {% else %}
+                    <div class="courier-payout-lines">
+                        {% for line in card.lines %}
+                            <div class="courier-payout-line">
+                                <strong>{{ line.orderReference }}</strong>
+                                <span>{{ line.deliveredAtLabel }} · {{ line.commune }}</span>
+                                <b>{{ line.amount|number_format(2, ',', ' ') }} €</b>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </details>
+    {% endmacro %}
+
+    <section class="courier-page" data-djama-root>
+        <div class="courier-hero">
+            <p class="courier-kicker">Portail livreur</p>
+            <h1>Bonjour {{ courier.firstName }}</h1>
+            <p>Vue terrain : commandes à prendre, livraisons actives, puis livraisons terminées cette semaine.</p>
+        </div>
+
+        {# Notifications globales Djama.
+           Important : les flashes sont affichés une seule fois en haut de page,
+           hors des boucles de commandes/vendeurs, pour éviter de répéter une
+           confirmation d'envoi de code sur chaque collecte restante. #}
+        {% set flashMessages = app.flashes %}
+        {% if flashMessages is not empty %}
+            <div class="courier-flashes" aria-live="polite" data-djama-flashes>
+                {% for label, messages in flashMessages %}
+                    {% for message in messages %}
+                        <div class="courier-alert courier-alert--{{ label }}">{{ message }}</div>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="courier-section-header">
+            <div>
+                <p class="courier-kicker">À récupérer</p>
+                <h2>À prendre en charge</h2>
+            </div>
+            <span class="courier-count">{{ availableOrderCards|length }}</span>
+        </div>
+
+        {% if availableOrderCards is empty %}
+            <div class="courier-empty">Aucune commande prête pour le moment.</div>
+        {% else %}
+            <div class="courier-list">
+                {% for card in availableOrderCards %}
+                    {{ _self.available_card(card) }}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="courier-section-header courier-section-header--spaced">
+            <div>
+                <p class="courier-kicker">Mes livraisons</p>
+                <h2>Prises en charge / en cours</h2>
+            </div>
+            <span class="courier-count">{{ currentOrderCards|length }}</span>
+        </div>
+
+        {% if currentOrderCards is empty %}
+            <div class="courier-empty">Tu n’as aucune livraison active.</div>
+        {% else %}
+            <div class="courier-list">
+                {% for card in currentOrderCards %}
+                    {{ _self.active_card(card) }}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="courier-section-header courier-section-header--spaced">
+            <div>
+                <p class="courier-kicker">Historique court</p>
+                <h2>Livrées cette semaine</h2>
+            </div>
+            <span class="courier-count">{{ deliveredWeekOrderCards|length }}</span>
+        </div>
+
+        <div class="courier-week-summary">
+            <span>Total livré cette semaine : <strong>{{ deliveredWeekOrderCards|length }}</strong> commande{{ deliveredWeekOrderCards|length > 1 ? 's' : '' }}</span>
+            <span>Gain livreur estimé : <strong>{{ deliveredWeekTotal|number_format(2, ',', ' ') }} €</strong></span>
+        </div>
+
+        {% if deliveredWeekOrderCards is empty %}
+            <div class="courier-empty">Aucune commande livrée cette semaine.</div>
+        {% else %}
+            <div class="courier-list courier-list--compact">
+                {% for card in deliveredWeekOrderCards %}
+                    {{ _self.delivered_card(card) }}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="courier-section-header courier-section-header--spaced">
+            <div>
+                <p class="courier-kicker">Rémunération</p>
+                <h2>Mes paiements</h2>
+            </div>
+            <span class="courier-count">{{ pendingPayoutCards|length + paidPayoutCards|length }}</span>
+        </div>
+
+        <div class="courier-week-summary courier-payout-current">
+            <span>Période en cours : <strong>{{ currentPayoutEstimate.periodLabel }}</strong></span>
+            <span>Commandes livrées comptabilisées : <strong>{{ currentPayoutEstimate.ordersCount }}</strong></span>
+            <span>Gain estimé période : <strong>{{ currentPayoutEstimate.totalAmount|number_format(2, ',', ' ') }} €</strong></span>
+            <span>Paiement cible : <strong>{{ currentPayoutEstimate.paymentDueLabel }}</strong></span>
+        </div>
+
+        {% if currentPayoutEstimate.lines is not empty %}
+            <details class="courier-card courier-card--payout courier-card--payout-estimate">
+                <summary class="courier-card__summary">
+                    <strong class="courier-card__summary-line">Détail période en cours · {{ currentPayoutEstimate.totalAmount|number_format(2, ',', ' ') }} €</strong>
+                    <span class="courier-card__toggle" aria-hidden="true"></span>
+                </summary>
+                <div class="courier-card__content">
+                    <div class="courier-payout-lines">
+                        {% for line in currentPayoutEstimate.lines %}
+                            <div class="courier-payout-line">
+                                <strong>{{ line.orderReference }}</strong>
+                                <span>{{ line.deliveredAtLabel }} · {{ line.commune }}</span>
+                                <b>{{ line.amount|number_format(2, ',', ' ') }} €</b>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </details>
+        {% endif %}
+
+        <div class="courier-subsection-title">À venir / en attente de paiement</div>
+        {% if pendingPayoutCards is empty %}
+            <div class="courier-empty">Aucun paiement validé ou en attente pour le moment.</div>
+        {% else %}
+            <div class="courier-list courier-list--compact">
+                {% for card in pendingPayoutCards %}
+                    {{ _self.payout_card(card, 'courier-card--payout-pending') }}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="courier-subsection-title">Historique payé</div>
+        {% if paidPayoutCards is empty %}
+            <div class="courier-empty">Aucun paiement marqué payé pour le moment.</div>
+        {% else %}
+            <div class="courier-list courier-list--compact">
+                {% for card in paidPayoutCards %}
+                    {{ _self.payout_card(card, 'courier-card--payout-paid') }}
+                {% endfor %}
+            </div>
+        {% endif %}
+    </section>
+{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        .courier-page {
+            width: min(1040px, calc(100% - 2rem));
+            margin: 0 auto 4rem;
+        }
+
+        .courier-hero {
+            margin: 1rem 0 1.25rem;
+            padding: 1.3rem;
+            border-radius: 24px;
+            background: #22160f;
+            color: #fff7ed;
+            box-shadow: 0 18px 48px rgba(34, 22, 15, .18);
+        }
+
+        .courier-hero h1 {
+            margin: .15rem 0 .4rem;
+            font-size: clamp(2rem, 8vw, 3.8rem);
+            line-height: .95;
+        }
+
+        .courier-hero p:last-child {
+            margin-bottom: 0;
+            opacity: .9;
+        }
+
+        .courier-kicker {
+            margin: 0;
+            font-size: .74rem;
+            font-weight: 950;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #b36b2c;
+        }
+
+        .courier-section-header {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: 1.1rem 0 .8rem;
+        }
+
+        .courier-section-header--spaced {
+            margin-top: 2rem;
+        }
+
+        .courier-section-header h2 {
+            margin: .1rem 0 0;
+            font-size: 1.55rem;
+            line-height: 1.05;
+        }
+
+        .courier-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2.3rem;
+            min-height: 2.3rem;
+            padding: .35rem .7rem;
+            border-radius: 999px;
+            background: #f6eadf;
+            font-weight: 950;
+            color: #7c3f13;
+        }
+
+        .courier-list {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        .courier-card,
+        .courier-empty,
+        .courier-alert,
+        .courier-week-summary {
+            border: 1px solid #eadccd;
+            border-radius: 22px;
+            background: #fffaf5;
+            box-shadow: 0 10px 30px rgba(83, 49, 22, .08);
+        }
+
+        .courier-card {
+            overflow: hidden;
+        }
+
+        .courier-card__summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .7rem;
+            min-width: 0;
+            padding: .95rem 1rem;
+            list-style: none;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .courier-card__summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .courier-card__summary-line {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            color: #24170f;
+            font-size: 1.02rem;
+            font-weight: 950;
+            line-height: 1.15;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .courier-card__toggle::before {
+            content: '+';
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.85rem;
+            height: 1.85rem;
+            border-radius: 999px;
+            background: #f2e6da;
+            color: #7c3f13;
+            font-size: 1.25rem;
+            font-weight: 950;
+        }
+
+        .courier-card[open] .courier-card__toggle::before {
+            content: '−';
+        }
+
+        .courier-card__content {
+            padding: 0 1rem 1rem;
+        }
+
+        .courier-card__topline + .courier-seller-block,
+        .courier-card__topline + .courier-status-note {
+            margin-top: .85rem;
+        }
+
+        .courier-card--picked {
+            border-color: #f2c48b;
+        }
+
+        .courier-card--out {
+            border-color: #bbf7d0;
+        }
+
+        .courier-card--delivered {
+            background: #fbf8f3;
+        }
+
+        .courier-card--payout {
+            border-color: #d9c2a8;
+            background: #fffdf9;
+        }
+
+        .courier-card--payout-paid {
+            border-color: #bbf7d0;
+            background: #f7fff8;
+        }
+
+        .courier-card--payout-pending,
+        .courier-card--payout-estimate {
+            border-color: #fed7aa;
+            background: #fffaf5;
+        }
+
+        .courier-card__topline {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            padding-bottom: .75rem;
+            border-bottom: 1px solid #efdfd0;
+        }
+
+        .courier-card__topline strong {
+            font-size: 1.25rem;
+            line-height: 1.1;
+            text-align: right;
+        }
+
+        .courier-terrain {
+            display: grid;
+            gap: .65rem;
+            margin-top: .85rem;
+        }
+
+        .courier-alert-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .35rem;
+            align-items: flex-start;
+        }
+
+        .courier-alert-badge {
+            display: inline-flex;
+            padding: .28rem .55rem;
+            border-radius: 999px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: .7rem;
+            font-weight: 950;
+            line-height: 1.15;
+        }
+
+        .courier-alert-badge--warning {
+            background: #fff7ed;
+            color: #9a3412;
+        }
+
+        .courier-alert-badge--danger {
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+        .courier-alert-badge--info {
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .courier-info-block,
+        .courier-note-form,
+        .courier-seller-block,
+        .courier-status-note,
+        .courier-week-summary {
+            padding: .75rem;
+            border-radius: 16px;
+            background: #f8efe6;
+        }
+
+        .courier-info-block > span,
+        .courier-note-form label,
+        .courier-seller-block > span,
+        .courier-actions-title {
+            display: block;
+            margin-bottom: .2rem;
+            color: #7a5135;
+            font-size: .74rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .courier-actions-title {
+            margin: .95rem 0 .35rem;
+        }
+
+        .courier-info-block strong,
+        .courier-info-block p {
+            display: block;
+            margin: .25rem 0 0;
+            color: #24170f;
+            font-weight: 850;
+            line-height: 1.3;
+        }
+
+        .courier-info-block em,
+        .courier-info-block small {
+            display: block;
+            margin-top: .2rem;
+            color: #7c6f64;
+            font-style: normal;
+            font-weight: 800;
+        }
+
+        .courier-inline-link {
+            display: inline-flex;
+            margin-top: .35rem;
+            color: #166534;
+            font-weight: 950;
+            text-decoration: none;
+        }
+
+        .courier-seller-contact {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .65rem;
+        }
+
+        .courier-seller-contact .courier-inline-link {
+            margin-top: 0;
+        }
+
+        .courier-collection-form,
+        .courier-delivery-code-form {
+            display: grid;
+            gap: .45rem;
+            margin-top: .35rem;
+        }
+
+        .courier-collection-form label,
+        .courier-delivery-code-form label {
+            color: #7a5135;
+            font-size: .72rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .courier-collection-code-info,
+        .courier-delivery-code-info {
+            display: grid;
+            gap: .15rem;
+            margin-top: .35rem;
+            padding: .55rem .65rem;
+            border-radius: 12px;
+            background: #f6eadf;
+            color: #5f4637;
+            font-weight: 850;
+            line-height: 1.25;
+        }
+
+        .courier-collection-code-info small,
+        .courier-delivery-code-info small,
+        .courier-delivery-code-form small {
+            color: #9a3412;
+            font-weight: 900;
+        }
+
+        .courier-note-form textarea,
+        .courier-collection-form input,
+        .courier-collection-form textarea,
+        .courier-delivery-code-form input {
+            width: 100%;
+            margin-top: .45rem;
+            padding: .8rem;
+            border: 1px solid #e5cdb9;
+            border-radius: 14px;
+            background: #fffaf5;
+            color: #24170f;
+            font: inherit;
+            resize: vertical;
+        }
+
+        .courier-collection-form input,
+        .courier-delivery-code-form input {
+            margin-top: .2rem;
+            min-height: 44px;
+            resize: none;
+        }
+
+        .courier-btn--note {
+            min-height: 40px;
+            margin-top: .5rem;
+            background: #eadccd;
+            color: #24170f;
+        }
+
+        .courier-sellers {
+            display: grid;
+            gap: .25rem;
+            margin: .35rem 0 0;
+            padding-left: 1.1rem;
+            font-weight: 800;
+        }
+
+        .courier-collection-list {
+            display: grid;
+            gap: .75rem;
+            margin-top: .45rem;
+        }
+
+        .courier-collection-progress {
+            display: inline-flex;
+            width: fit-content;
+            margin-top: .35rem;
+            padding: .25rem .55rem;
+            border-radius: 999px;
+            background: #f6eadf;
+            color: #7c3f13;
+            font-size: .78rem;
+            font-weight: 950;
+        }
+
+        .courier-collection-seller {
+            display: grid;
+            gap: .35rem;
+            padding: .7rem;
+            border-radius: 14px;
+            background: #fffaf5;
+        }
+
+        .courier-collection-seller--done {
+            border: 1px solid #bbf7d0;
+            background: #f0fdf4;
+        }
+
+        .courier-collection-title {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: .65rem;
+        }
+
+        .courier-collection-seller strong {
+            color: #24170f;
+            font-weight: 950;
+        }
+
+        .courier-collection-badge {
+            display: inline-flex;
+            flex-shrink: 0;
+            padding: .25rem .5rem;
+            border-radius: 999px;
+            background: #dcfce7;
+            color: #166534;
+            font-size: .68rem;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .courier-collection-badge--pending {
+            background: #ffedd5;
+            color: #9a3412;
+        }
+
+        .courier-collection-address,
+        .courier-collection-note,
+        .courier-collection-warning {
+            margin: .1rem 0 0;
+            color: #5f4637;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .courier-collection-address span {
+            display: block;
+            margin-bottom: .1rem;
+            color: #7a5135;
+            font-size: .7rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .courier-collection-note {
+            padding-top: .25rem;
+            color: #7c3f13;
+        }
+
+        .courier-collection-note--saved {
+            color: #166534;
+        }
+
+        .courier-collection-warning {
+            padding: .45rem .55rem;
+            border-radius: 12px;
+            background: #fff7ed;
+            color: #9a3412;
+        }
+
+        .courier-muted {
+            color: #7c6f64;
+            font-weight: 800;
+        }
+
+        .courier-status-note {
+            margin-top: .85rem;
+            font-weight: 900;
+            color: #7c3f13;
+        }
+
+        .courier-status-note--ready {
+            color: #166534;
+        }
+
+        .courier-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .6rem;
+            margin-top: 1rem;
+        }
+
+        .courier-card__content > form {
+            margin-top: 1rem;
+        }
+
+        .courier-actions form:not(.courier-delivery-code-form) {
+            display: contents;
+        }
+
+        .courier-actions .courier-delivery-code-info,
+        .courier-actions .courier-delivery-code-form {
+            grid-column: 1 / -1;
+        }
+
+        .courier-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 48px;
+            padding: .8rem 1rem;
+            border: 0;
+            border-radius: 16px;
+            font-weight: 950;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .courier-btn--light {
+            background: #f2e6da;
+            color: #24170f;
+        }
+
+        .courier-btn--primary {
+            grid-column: 1 / -1;
+            background: #8b4513;
+            color: #fff;
+        }
+
+        .courier-btn--success {
+            grid-column: 1 / -1;
+            background: #166534;
+            color: #fff;
+        }
+
+        .courier-btn--collect {
+            min-height: 42px;
+            background: #166534;
+            color: #fff;
+        }
+
+        .courier-btn--disabled,
+        .courier-btn:disabled {
+            background: #d6c6b8;
+            color: #7c6f64;
+            cursor: not-allowed;
+            opacity: .85;
+        }
+
+        .courier-empty,
+        .courier-alert,
+        .courier-week-summary {
+            padding: 1rem;
+            font-weight: 800;
+        }
+
+        .courier-week-summary {
+            display: grid;
+            gap: .35rem;
+            margin-bottom: .8rem;
+            background: #f8efe6;
+        }
+
+        .courier-payout-current {
+            border-color: #f2c48b;
+        }
+
+        .courier-payout-meta {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .65rem;
+            margin-top: .85rem;
+        }
+
+        .courier-payout-lines {
+            display: grid;
+            gap: .55rem;
+            margin-top: .85rem;
+        }
+
+        .courier-payout-line {
+            display: grid;
+            gap: .1rem;
+            padding: .7rem;
+            border-radius: 14px;
+            background: #f8efe6;
+        }
+
+        .courier-payout-line strong,
+        .courier-payout-line b {
+            color: #24170f;
+            font-weight: 950;
+        }
+
+        .courier-payout-line span {
+            color: #7c6f64;
+            font-size: .82rem;
+            font-weight: 850;
+        }
+
+        .courier-subsection-title {
+            margin: 1.05rem 0 .55rem;
+            color: #7a5135;
+            font-size: .82rem;
+            font-weight: 950;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .courier-empty--small {
+            margin-top: .85rem;
+            box-shadow: none;
+        }
+
+        .courier-list--compact .courier-card__summary {
+            padding: .9rem;
+        }
+
+        .courier-list--compact .courier-card__content {
+            padding: 0 .9rem .9rem;
+        }
+
+        .courier-alert {
+            margin: 1rem 0;
+        }
+
+        .courier-alert--success {
+            border-color: #bbf7d0;
+            background: #f0fdf4;
+            color: #166534;
+        }
+
+        .courier-alert--warning {
+            border-color: #fed7aa;
+            background: #fff7ed;
+            color: #9a3412;
+        }
+
+        .courier-alert--danger {
+            border-color: #fecaca;
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+
+        .courier-alert--info {
+            border-color: #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+
+
+        .courier-ajax-status {
+            margin-top: .55rem;
+            padding: .65rem .75rem;
+            border-radius: 14px;
+            background: #fff7ed;
+            color: #9a3412;
+            font-weight: 900;
+        }
+
+        .courier-ajax-status--success,
+        .courier-ajax-status--info {
+            background: #f0fdf4;
+            color: #166534;
+        }
+
+        .courier-ajax-status--danger,
+        .courier-ajax-status--warning {
+            background: #fef2f2;
+            color: #991b1b;
+        }
+
+        .courier-btn--loading {
+            opacity: .72;
+            cursor: wait;
+        }
+
+        @media (max-width: 780px) {
+            .courier-page {
+                width: min(100% - 1rem, 520px);
+            }
+
+            .courier-list {
+                grid-template-columns: 1fr;
+            }
+
+            .courier-payout-meta {
+                grid-template-columns: 1fr;
+            }
+
+            .courier-card__summary {
+                padding: .9rem;
+            }
+
+            .courier-card__content {
+                padding: 0 .9rem .9rem;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .courier-card__summary {
+                align-items: center;
+            }
+
+            .courier-card__summary-line {
+                font-size: .96rem;
+            }
+
+            .courier-card__topline {
+                display: block;
+            }
+
+            .courier-card__topline strong {
+                display: block;
+                margin-top: .25rem;
+                text-align: left;
+            }
+
+            .courier-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .courier-btn--primary,
+            .courier-btn--success {
+                grid-column: auto;
+            }
+        }
+    </style>
+{% endblock %}
+
+
+{% block javascripts %}
+    {{ parent() }}
+    <script>
+        (() => {
+            const ROOT_SELECTOR = '[data-djama-root]';
+            const FORM_SELECTOR = 'form[data-djama-ajax="true"]';
+
+            function getRoot() {
+                return document.querySelector(ROOT_SELECTOR);
+            }
+
+            function rememberOpenCards(extraOrderId) {
+                const openOrderIds = Array.from(document.querySelectorAll('.courier-card[open][data-djama-order-id]'))
+                    .map((card) => card.dataset.djamaOrderId || '')
+                    .filter(Boolean);
+
+                if (extraOrderId) {
+                    openOrderIds.push(String(extraOrderId));
+                }
+
+                return Array.from(new Set(openOrderIds));
+            }
+
+            function restoreOpenCards(openOrderIds) {
+                if (!openOrderIds.length) {
+                    return;
+                }
+
+                const openSet = new Set(openOrderIds.map(String));
+                document.querySelectorAll('.courier-card[data-djama-order-id]').forEach((card) => {
+                    const orderId = card.dataset.djamaOrderId || '';
+                    if (orderId && openSet.has(orderId)) {
+                        card.open = true;
+                    }
+                });
+            }
+
+            function ensureFlashContainer() {
+                const root = getRoot();
+                if (!root) {
+                    return null;
+                }
+
+                let container = root.querySelector('[data-djama-flashes]');
+                if (container) {
+                    return container;
+                }
+
+                container = document.createElement('div');
+                container.className = 'courier-flashes';
+                container.setAttribute('aria-live', 'polite');
+                container.dataset.djamaFlashes = '';
+
+                const hero = root.querySelector('.courier-hero');
+                if (hero && hero.nextSibling) {
+                    root.insertBefore(container, hero.nextSibling);
+                } else {
+                    root.prepend(container);
+                }
+
+                return container;
+            }
+
+            function showLocalMessage(type, message) {
+                const container = ensureFlashContainer();
+                if (!container || !message) {
+                    return;
+                }
+
+                const alert = document.createElement('div');
+                alert.className = `courier-alert courier-alert--${type || 'info'}`;
+                alert.textContent = message;
+                container.replaceChildren(alert);
+            }
+
+            async function refreshDashboard(refreshUrl, forceOpenOrderId) {
+                const root = getRoot();
+                if (!root) {
+                    window.location.reload();
+                    return;
+                }
+
+                const openKeys = rememberOpenCards(forceOpenOrderId);
+                const response = await fetch(refreshUrl || window.location.href, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                });
+
+                if (!response.ok) {
+                    throw new Error('Rafraîchissement Djama impossible.');
+                }
+
+                const html = await response.text();
+                const nextDocument = new DOMParser().parseFromString(html, 'text/html');
+                const nextRoot = nextDocument.querySelector(ROOT_SELECTOR);
+
+                if (!nextRoot) {
+                    throw new Error('Réponse Djama incomplète.');
+                }
+
+                root.replaceWith(nextRoot);
+                restoreOpenCards(openKeys);
+            }
+
+            function setFormBusy(form, busy) {
+                form.dataset.djamaBusy = busy ? '1' : '0';
+                form.querySelectorAll('button, input, textarea, select').forEach((field) => {
+                    if (busy) {
+                        field.dataset.djamaWasDisabled = field.disabled ? '1' : '0';
+                        field.disabled = true;
+                    } else if (field.dataset.djamaWasDisabled !== '1') {
+                        field.disabled = false;
+                    }
+                });
+
+                const button = form.querySelector('button[type="submit"]');
+                if (!button) {
+                    return;
+                }
+
+                if (busy) {
+                    button.dataset.djamaOriginalText = button.textContent;
+                    button.classList.add('courier-btn--loading');
+                    button.textContent = 'Traitement...';
+                } else {
+                    button.classList.remove('courier-btn--loading');
+                    if (button.dataset.djamaOriginalText) {
+                        button.textContent = button.dataset.djamaOriginalText;
+                    }
+                }
+            }
+
+            async function submitAjaxForm(form) {
+                if (form.dataset.djamaBusy === '1') {
+                    return;
+                }
+
+                // Important : construire FormData AVANT de désactiver les champs.
+                // Un champ disabled n'est pas envoyé par FormData.
+                const formData = new FormData(form);
+                const forceOpenOrderId = form.closest('.courier-card')?.dataset.djamaOrderId || '';
+
+                setFormBusy(form, true);
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: (form.method || 'POST').toUpperCase(),
+                        body: formData,
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    const payload = await response.json();
+
+                    await refreshDashboard(payload.refreshUrl || window.location.href, forceOpenOrderId);
+
+                    showLocalMessage(
+                        payload.flashType || (payload.ok ? 'success' : 'warning'),
+                        payload.message || 'Action traitée.'
+                    );
+                } catch (error) {
+                    showLocalMessage('danger', error instanceof Error ? error.message : 'Action impossible. Recharge la page puis réessaie.');
+                } finally {
+                    const stillConnected = document.documentElement.contains(form);
+                    if (stillConnected) {
+                        setFormBusy(form, false);
+                    }
+                }
+            }
+
+            document.addEventListener('submit', (event) => {
+                const form = event.target instanceof HTMLFormElement ? event.target : null;
+                if (!form || !form.matches(FORM_SELECTOR)) {
+                    return;
+                }
+
+                event.preventDefault();
+                submitAjaxForm(form);
+            });
+        })();
+    </script>
+{% endblock %}

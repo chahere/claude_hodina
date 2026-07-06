@@ -1,0 +1,77 @@
+{% set commerce = hodina_commerce_state() %}
+{% if commerce.enabled %}
+  <section class="launch-banner"{% if commerce.reopensAtIso %} data-launch-opening-at="{{ commerce.reopensAtIso }}"{% endif %}>
+    <div class="container launch-banner-inner">
+      <div class="launch-copy">
+        <div class="launch-kicker">{{ commerce.modeLabel }}</div>
+        <h1>{{ commerce.title }}</h1>
+        <p>{{ commerce.message }}</p>
+        {% if commerce.isTester %}
+          <p class="muted small">Mode testeur actif : ce compte peut utiliser le panier et valider le parcours malgré le blocage public.</p>
+        {% endif %}
+      </div>
+
+      {% if commerce.reopensAtIso %}
+        <div class="launch-countdown" aria-label="Compte à rebours avant réactivation des commandes">
+          <div class="launch-timebox"><strong data-countdown-days>--</strong><span>Jours</span></div>
+          <div class="launch-timebox"><strong data-countdown-hours>--</strong><span>Heures</span></div>
+          <div class="launch-timebox"><strong data-countdown-minutes>--</strong><span>Minutes</span></div>
+          <div class="launch-timebox"><strong data-countdown-seconds>--</strong><span>Secondes</span></div>
+        </div>
+      {% endif %}
+
+      {% if commerce.emailCaptureEnabled %}
+        <form class="launch-form" method="post" action="{{ path('launch_subscribe') }}">
+          <input type="hidden" name="_token" value="{{ csrf_token('launch_subscribe') }}">
+          <label for="launch-email">Être averti quand les commandes seront disponibles</label>
+          <div class="launch-form-row">
+            <input id="launch-email" type="email" name="email" placeholder="ton@email.fr" required>
+            <button class="btn btn-primary" type="submit">{{ commerce.buttonLabel }}</button>
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if commerce.reopensAtIso %}
+    <script>
+      (function () {
+        const banner = document.querySelector('[data-launch-opening-at]');
+        if (!banner) return;
+
+        const target = new Date(banner.dataset.launchOpeningAt).getTime();
+        const days = banner.querySelector('[data-countdown-days]');
+        const hours = banner.querySelector('[data-countdown-hours]');
+        const minutes = banner.querySelector('[data-countdown-minutes]');
+        const seconds = banner.querySelector('[data-countdown-seconds]');
+
+        function pad(value) {
+          return String(value).padStart(2, '0');
+        }
+
+        function tick() {
+          const diff = Math.max(0, target - Date.now());
+          const totalSeconds = Math.floor(diff / 1000);
+
+          const d = Math.floor(totalSeconds / 86400);
+          const h = Math.floor((totalSeconds % 86400) / 3600);
+          const m = Math.floor((totalSeconds % 3600) / 60);
+          const s = totalSeconds % 60;
+
+          if (days) days.textContent = String(d);
+          if (hours) hours.textContent = pad(h);
+          if (minutes) minutes.textContent = pad(m);
+          if (seconds) seconds.textContent = pad(s);
+
+          if (diff <= 0) {
+            window.clearInterval(timer);
+            window.location.reload();
+          }
+        }
+
+        tick();
+        const timer = window.setInterval(tick, 1000);
+      })();
+    </script>
+  {% endif %}
+{% endif %}

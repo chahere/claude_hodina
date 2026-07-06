@@ -1,0 +1,3002 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Panier – Hodina{% endblock %}
+
+{% block body %}
+{% set salesOpening = hodina_commerce_state() %}
+<section class="cart-page">
+  <div class="container">
+
+    <div class="cart-info-flash cart-info-flash--delivery-fee cart-info-flash--page-top" data-delivery-fee-update-flash role="status" aria-live="polite" hidden>
+      <button type="button" class="cart-info-flash-close" data-dismiss-delivery-fee-update aria-label="Fermer le message">×</button>
+      <strong>Frais de livraison mis à jour</strong>
+      <p>Selon ta nouvelle adresse, Hodina a recalculé les frais. Le détail apparaît sous “Frais de livraison”.</p>
+    </div>
+
+    <div class="cart-head">
+      <h1 class="cart-title">Mon panier</h1>
+      <p class="cart-sub muted">Vérifie tes produits, choisis ton adresse de livraison et valide ta commande depuis le panier.</p>
+    </div>
+
+    {% for label, messages in app.flashes %}
+      {% for message in messages %}
+        <div class="alert alert-{{ label }}">{{ message }}</div>
+      {% endfor %}
+    {% endfor %}
+
+    {% set checkout_has_errors = form is defined and form.vars.submitted|default(false) and not form.vars.valid %}
+    {% if checkout_has_errors %}
+      <div class="checkout-global-alert alert alert-danger" data-checkout-server-alert role="alert" aria-live="assertive">
+        <strong>Impossible de valider ta commande pour le moment.</strong>
+        <p>Corrige les informations ci-dessous, puis réessaie.</p>
+        <ul>
+          {% for error in form.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.firstName.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.lastName.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.phone.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.email.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.deliveryPointId.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.deliveryPointRequestedDate.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.deliveryPointRequestedTime.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.deliveryPointTimeWindowId.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.address.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.commune.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.postalCode.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.localityText.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+          {% for error in form.acceptTerms.vars.errors %}
+            <li>{{ error.message }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="checkout-client-alert alert alert-danger" data-checkout-client-alert role="status" aria-live="polite" hidden>
+      <strong data-checkout-client-alert-title>Commande incomplète</strong>
+      <p data-checkout-client-alert-message>Complète les informations obligatoires pour valider.</p>
+    </div>
+
+    {% if cart.items is empty %}
+      <div class="empty-state">
+        <p><strong>Ton panier est vide.</strong></p>
+        <a class="btn btn-primary" href="{{ path('product_catalogue') }}">Voir le catalogue</a>
+      </div>
+    {% else %}
+
+      {{ form_start(form, {
+        'action': path('checkout_index'),
+        'attr': {
+          'id': 'checkout-form',
+          'class': 'cart-layout cart-layout--linear',
+          'data-cart-update-url': path('cart_update'),
+          'novalidate': 'novalidate'
+        }
+      }) }}
+        {% set point_options = deliveryPointOptions|default({}) %}
+        {% set point_choices = deliveryPointChoices|default([]) %}
+        {% set current_delivery_method = form.deliveryMethod.vars.value|default('') %}
+        {% if current_delivery_method is empty %}
+          {% set current_delivery_method = point_options.requiresDeliveryPoint|default(false) ? 'DELIVERY_POINT' : 'STANDARD' %}
+        {% endif %}
+        {% set uses_delivery_point_mode = point_options.requiresDeliveryPoint|default(false) or current_delivery_method == 'DELIVERY_POINT' %}
+        {% set schedule_preview = deliverySchedulePreview|default(null) %}
+        {% set has_appointment_delivery_promise = cartHasAppointmentDeliveryPromise|default(false) %}
+        {% set address_localities = addressLocalities|default([]) %}
+        {% if address_localities is not empty %}
+
+          <style>
+            .address-locality-suggestion-list {
+              display: grid;
+              gap: 6px;
+              margin-top: 8px;
+            }
+            .address-locality-suggestion-list[hidden] {
+              display: none;
+            }
+            .address-locality-suggestion-button {
+              width: 100%;
+              border: 1px solid rgba(0, 0, 0, .14);
+              border-radius: 12px;
+              background: #fff;
+              padding: 10px 12px;
+              text-align: left;
+              font: inherit;
+              cursor: pointer;
+            }
+            .address-locality-suggestion-button strong {
+              display: block;
+            }
+            .address-locality-suggestion-button span {
+              display: block;
+              margin-top: 2px;
+            }
+          </style>
+
+          <datalist id="checkout-address-locality-suggestions">
+            {% for locality in address_localities %}
+              {% set locality_commune = locality.deliveryCommune %}
+              <option
+                value="{{ locality.name|e('html_attr') }}"
+                data-locality-id="{{ locality.id }}"
+                data-postal-code="{{ locality.postalCode|default('')|e('html_attr') }}"
+                data-commune="{{ locality_commune ? locality_commune.name|e('html_attr') : '' }}"
+              >{{ locality.name }}{% if locality_commune %} — {{ locality_commune.name }}{% endif %}</option>
+            {% endfor %}
+          </datalist>
+        {% endif %}
+        <div class="cart-main-column">
+          <section class="cart-step cart-step--products" aria-labelledby="cart-step-products-title">
+            <div class="cart-step-head">
+              <span class="cart-step-index">1</span>
+              <div>
+                <h2 id="cart-step-products-title" class="cart-step-title">Mes produits</h2>
+                <p class="cart-step-sub muted">Ajuste les quantités. Les changements sont synchronisés automatiquement.</p>
+              </div>
+            </div>
+
+            <div class="cart-items">
+          {% for item in cart.items %}
+            {% set p = item.product %}
+
+            <article class="cart-card">
+              <div class="cart-card-media">
+                {% set img = null %}
+                {% if p.images is defined and p.images|length > 0 %}
+                  {% set img = p.images|first %}
+                {% endif %}
+
+                {% if img %}
+                  <img class="cart-card-img" src="{{ asset('uploads/products/' ~ img.path) }}" alt="{{ p.name }}" loading="lazy">
+                {% else %}
+                  <div class="cart-card-img cart-card-img--ph" aria-hidden="true">🛍️</div>
+                {% endif %}
+              </div>
+
+              <div class="cart-card-body">
+                <div class="cart-card-top">
+                  <a class="cart-card-name" href="{{ path('product_show', {slug: p.slug}) }}">{{ p.name }}</a>
+
+                  <div class="cart-card-meta muted">
+                    {% if p.seller is defined and p.seller %}
+                      <span class="cart-seller-badge">{{ p.seller.publicDisplayName }}</span>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div class="cart-card-bottom">
+                  <div class="cart-card-price">
+                    <div class="muted small">Prix</div>
+                    <div class="price">{{ item.unitPrice|number_format(2, ',', ' ') }} € <span class="cart-card-unit">{{ p.unitLabel|lower }}</span></div>
+                  </div>
+
+                  <div class="cart-card-qty">
+                    <div class="muted small">Qté</div>
+
+                    <div class="qty-stepper qty-stepper--sm" data-cart-stepper>
+                      <button type="button" data-minus aria-label="Diminuer">−</button>
+
+                      <input
+                        class="qty-stepper-input"
+                        type="number"
+                        min="0"
+                        max="99"
+                        name="qty[{{ p.id }}]"
+                        value="{{ item.qty }}"
+                        inputmode="numeric"
+                        aria-label="Quantité {{ p.name }}"
+                        data-qty
+                      >
+
+                      <button type="button" data-plus aria-label="Augmenter">+</button>
+                    </div>
+                  </div>
+
+                  <div class="cart-card-subtotal">
+                    <div class="muted small">Sous-total</div>
+                    <div class="price" data-line-total data-unit-price="{{ item.unitPrice }}">
+                      {{ item.lineTotal|number_format(2, ',', ' ') }} €
+                    </div>
+                  </div>
+                </div>
+
+                <div class="cart-card-actions">
+                  <button
+                    class="btn btn-link danger"
+                    type="button"
+                    data-remove-line
+                    data-product-id="{{ p.id }}"
+                  >
+                    Retirer
+                  </button>
+                </div>
+              </div>
+            </article>
+          {% endfor %}
+            </div>
+          </section>
+
+          <section class="summary-card cart-step cart-step--totals" aria-labelledby="cart-step-totals-title">
+            <div class="cart-step-head">
+              <span class="cart-step-index">2</span>
+              <div>
+                <h2 id="cart-step-totals-title" class="cart-step-title">Total du panier</h2>
+                <p class="cart-step-sub muted">Vérifie le total des articles et les frais de livraison avant de confirmer tes informations.</p>
+              </div>
+            </div>
+
+
+            <div class="summary-row">
+              <span class="muted">Articles</span>
+              <strong data-cart-total-qty>{{ cart.totalQty }}</strong>
+            </div>
+
+            <div class="summary-row">
+              <span>Total produits</span>
+              <strong data-cart-total data-checkout-products-total data-products-total="{{ cart.total }}">{{ cart.total|number_format(2, ',', ' ') }} €</strong>
+            </div>
+
+            <div
+              id="checkout-logistics-preview"
+              class="cart-logistics-preview cart-logistics-preview--simple {{ logisticsPreview is defined and logisticsPreview and logisticsPreview.requiresBarge ? 'is-barge' : '' }}"
+              data-preview-url="{{ path('cart_logistics_preview') }}"
+              aria-live="polite"
+            >
+              <p class="cart-logistics-message" data-logistics-message>
+                {% if logisticsPreview is defined and logisticsPreview %}
+                  {{ logisticsPreview.message }}
+                {% else %}
+                  Choisis une commune livrée pour recalculer les frais de livraison.
+                {% endif %}
+              </p>
+              <div class="summary-row cart-logistics-fee" data-logistics-fee-row {% if logisticsPreview is not defined or not logisticsPreview or logisticsPreview.estimatedDeliveryFee is null %}hidden{% endif %}>
+                <span>Frais de livraison</span>
+                <strong data-logistics-fee>{{ logisticsPreview is defined and logisticsPreview and logisticsPreview.estimatedDeliveryFee is not null ? logisticsPreview.estimatedDeliveryFee|number_format(2, ',', ' ') ~ ' €' : '' }}</strong>
+              </div>
+              {% set logistics_fee_reasons = [] %}
+              {% set logistics_land_hops = logisticsPreview is defined and logisticsPreview ? logisticsPreview.landHopCount|default(0) : 0 %}
+              {% if logistics_land_hops > 0 %}
+                {% set logistics_fee_reasons = logistics_fee_reasons|merge([logistics_land_hops ~ ' commune' ~ (logistics_land_hops > 1 ? 's' : '') ~ ' traversée' ~ (logistics_land_hops > 1 ? 's' : '')]) %}
+              {% elseif logisticsPreview is defined and logisticsPreview and logisticsPreview.collectionPointCount|default(0) > 1 %}
+                {% set logistics_fee_reasons = logistics_fee_reasons|merge(['plusieurs communes de collecte']) %}
+              {% endif %}
+              {% if logisticsPreview is defined and logisticsPreview and (logisticsPreview.requiresBarge|default(false) or logisticsPreview.bargeHopCount|default(0) > 0) %}
+                {% set logistics_fee_reasons = logistics_fee_reasons|merge(['barge']) %}
+              {% endif %}
+              <p class="cart-logistics-fee-note" data-logistics-fee-reason {% if logistics_fee_reasons is empty %}hidden{% endif %}>
+                {{ logistics_fee_reasons is not empty ? 'Inclus : ' ~ logistics_fee_reasons|join(' + ') ~ '.' : '' }}
+              </p>
+              <div class="summary-row summary-total cart-logistics-total" data-logistics-total-row {% if logisticsPreview is not defined or not logisticsPreview or logisticsPreview.estimatedDeliveryFee is null %}hidden{% endif %}>
+                <span>Total estimé</span>
+                <strong data-logistics-total>{{ logisticsPreview is defined and logisticsPreview and logisticsPreview.estimatedDeliveryFee is not null ? (cart.total + logisticsPreview.estimatedDeliveryFee)|number_format(2, ',', ' ') ~ ' €' : '' }}</strong>
+              </div>
+            </div>
+
+            <div class="summary-actions summary-actions--secondary">
+              <button class="btn btn-secondary" type="submit" formaction="{{ path('cart_update') }}" formnovalidate>Mettre à jour les quantités</button>
+
+              <button
+                class="btn btn-link danger"
+                type="button"
+                data-clear-cart
+              >
+                Vider le panier
+              </button>
+            </div>
+          </section>
+          {% if app.user %}
+          <section class="summary-card cart-step cart-step--delivery" aria-labelledby="cart-step-delivery-title">
+            <div class="cart-step-head">
+              <span class="cart-step-index">3</span>
+              <div>
+                <h2 id="cart-step-delivery-title" class="cart-step-title">Livraison</h2>
+                <p class="cart-step-sub muted">Confirme l’adresse où le livreur doit te retrouver.</p>
+              </div>
+            </div>
+
+            {% if app.user %}
+              <div class="point" style="margin-bottom:12px;">
+                <strong>Connecté avec ton compte Hodina</strong>
+                <p class="muted small">Ta commande sera rattachée à ton compte.</p>
+                <div class="checkout-account-summary">
+                  <div><strong>{{ app.user.firstName }} {{ app.user.lastName }}</strong></div>
+                  <div class="muted small">{{ app.user.email }}</div>
+                  <div class="muted small">{{ app.user.phone }}</div>
+                </div>
+              </div>
+
+              <div style="display:none;">
+                {{ form_row(form.firstName) }}
+                {{ form_row(form.lastName) }}
+                {{ form_row(form.phoneCountryCode) }}
+                {{ form_row(form.phone) }}
+                {{ form_row(form.email) }}
+              </div>
+            {% else %}
+              <p class="muted small">Renseigne tes infos. Pendant le pilote, un admin valide la commande avant livraison.</p>
+              {{ form_row(form.firstName) }}
+              {{ form_row(form.lastName) }}
+              {{ form_row(form.phoneCountryCode) }}
+              {{ form_row(form.phone) }}
+
+              <div class="client-form-field{% if form.email.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.email, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.email, {'attr': {'class': 'client-form-control'}}) }}
+                {% if form.email.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.email) }}</div>
+                {% endif %}
+              </div>
+            {% endif %}
+
+            {{ form_widget(form.existingAddressId) }}
+            {{ form_widget(form.addressLocalityId) }}
+            {{ form_widget(form.billingExistingAddressId) }}
+            <div style="display:none;">
+              {{ form_widget(form.deliveryMethod) }}
+              {{ form_widget(form.deliveryPointId) }}
+              {{ form_widget(form.deliveryPointTimeWindowId) }}
+              {% if not point_options.hasDeliveryPointProducts|default(false) %}
+                {{ form_widget(form.deliveryPointRequestedDate) }}
+                {{ form_widget(form.deliveryPointRequestedTime) }}
+                {{ form_widget(form.deliveryPointCustomerInstructions) }}
+              {% endif %}
+            </div>
+
+            {% set point_options = deliveryPointOptions|default({}) %}
+            {% set point_choices = deliveryPointChoices|default([]) %}
+            {% if point_options.hasDeliveryPointProducts|default(false) %}
+              <div
+                class="delivery-point-choice point"
+                data-delivery-point-section
+                data-point-required="{{ point_options.requiresDeliveryPoint|default(false) ? '1' : '0' }}"
+              >
+                <strong>Point de remise Hodina</strong>
+                {% if point_options.requiresDeliveryPoint|default(false) %}
+                  <p class="muted small">Ce panier contient un produit qui impose une remise dans un point précis. Choisis le lieu, puis indique la date et l’heure où tu seras sur place.</p>
+                {% else %}
+                  <p class="muted small">Tu peux choisir une livraison à ton adresse ou une remise dans un point Hodina.</p>
+                  <div class="delivery-method-toggle" role="group" aria-label="Mode de livraison">
+                    <button
+                      type="button"
+                      class="delivery-method-btn{{ current_delivery_method == 'STANDARD' ? ' is-selected' : '' }}"
+                      data-delivery-method="STANDARD"
+                      aria-pressed="{{ current_delivery_method == 'STANDARD' ? 'true' : 'false' }}"
+                    >Livraison à mon adresse</button>
+                    <button
+                      type="button"
+                      class="delivery-method-btn{{ current_delivery_method == 'DELIVERY_POINT' ? ' is-selected' : '' }}"
+                      data-delivery-method="DELIVERY_POINT"
+                      aria-pressed="{{ current_delivery_method == 'DELIVERY_POINT' ? 'true' : 'false' }}"
+                    >Point de remise</button>
+                  </div>
+                {% endif %}
+
+                {% if point_options.conflictMessage|default(null) %}
+                  <div class="alert alert-warning">{{ point_options.conflictMessage }}</div>
+                {% endif %}
+
+                {% if point_choices is not empty %}
+                  <div data-delivery-point-mode-panel{% if not uses_delivery_point_mode %} hidden{% endif %}>
+                  <div class="delivery-point-cards" data-delivery-point-cards>
+                    {% for point in point_choices %}
+                      <button
+                        type="button"
+                        class="delivery-point-card"
+                        data-delivery-point-card
+                        data-point-id="{{ point.id }}"
+                        data-point-name="{{ point.name|e('html_attr') }}"
+                        data-line1="{{ point.line1|e('html_attr') }}"
+                        data-line2="{{ point.line2|default('')|e('html_attr') }}"
+                        data-postal-code="{{ point.postalCode|default('')|e('html_attr') }}"
+                        data-commune="{{ point.commune|default('')|e('html_attr') }}"
+                        data-zone="{{ point.zone|default('')|e('html_attr') }}"
+                        data-gps-latitude="{{ point.gpsLatitude|default('') }}"
+                        data-gps-longitude="{{ point.gpsLongitude|default('') }}"
+                        data-gps-accuracy="{{ point.gpsAccuracyMeters|default('') }}"
+                        data-public-instructions="{{ point.publicInstructions|default('')|e('html_attr') }}"
+                      >
+                        <span class="delivery-point-card__type">{{ point.typeLabel }}</span>
+                        <strong>{{ point.name }}</strong>
+                        <span>{{ point.line1 }}</span>
+                        <small>{{ point.postalCode }} {{ point.commune }}</small>
+                        {% if point.publicInstructions %}
+                          <small>{{ point.publicInstructions }}</small>
+                        {% endif %}
+                      </button>
+                    {% endfor %}
+                  </div>
+
+                  <div class="delivery-point-windows-help" data-delivery-point-windows-help>
+                    <strong>Horaires proposés</strong>
+                    <p class="muted small">Choisis ensuite la date et l’heure exacte où tu seras au rendez-vous.</p>
+                    {% if point_options.maximumOrderLeadTimeHours|default(0) > 0 %}
+                      <div class="alert alert-info">Certains produits de ton panier doivent être commandés au moins {{ point_options.maximumOrderLeadTimeHours }} h avant le rendez-vous.</div>
+                    {% endif %}
+                    {% for point in point_choices %}
+                      <ul class="delivery-point-window-list" data-delivery-point-window-list data-point-id="{{ point.id }}" hidden>
+                        {% for window in point.timeWindows %}
+                          <li data-window-id="{{ window.id }}" data-window-label="{{ window.label|e('html_attr') }}" data-window-start="{{ window.startTime }}" data-window-end="{{ window.endTime }}" data-window-weekday="{{ window.weekday|default('') }}">
+                            {{ window.label }}
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% endfor %}
+                  </div>
+
+                  <div class="guest-checkout-grid delivery-point-appointment-grid">
+                    <div class="client-form-field delivery-point-appointment-field delivery-point-date-field{% if form.deliveryPointRequestedDate.vars.errors|length > 0 %} has-error{% endif %}">
+                      {{ form_label(form.deliveryPointRequestedDate, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                      <div class="delivery-point-date-control">
+                        {{ form_widget(form.deliveryPointRequestedDate, {'attr': {'class': 'client-form-control delivery-point-date-input', 'data-delivery-point-date-input': '1'}}) }}
+                      </div>
+                      {% if form.deliveryPointRequestedDate.vars.errors|length > 0 %}
+                        <div class="client-form-errors">{{ form_errors(form.deliveryPointRequestedDate) }}</div>
+                      {% endif %}
+                    </div>
+
+                    <div class="client-form-field delivery-point-appointment-field delivery-point-slot-field{% if form.deliveryPointRequestedTime.vars.errors|length > 0 %} has-error{% endif %}" data-delivery-point-slot-field>
+                      <label class="client-form-label">Créneau de remise</label>
+                      {{ form_widget(form.deliveryPointRequestedTime, {'attr': {'data-delivery-point-time-input': '1'}}) }}
+                      <div class="delivery-point-slot-control">
+                        <select class="client-form-control delivery-point-slot-select" data-delivery-point-slot-select disabled aria-disabled="true">
+                          <option value="">Choisis d’abord une date</option>
+                        </select>
+                      </div>
+                      <p class="muted small" data-delivery-point-slot-help>Choisis une date pour afficher les créneaux disponibles.</p>
+                      {% if form.deliveryPointRequestedTime.vars.errors|length > 0 %}
+                        <div class="client-form-errors">{{ form_errors(form.deliveryPointRequestedTime) }}</div>
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  {% if form.deliveryPointTimeWindowId.vars.errors|length > 0 %}
+                    <div class="client-form-errors">{{ form_errors(form.deliveryPointTimeWindowId) }}</div>
+                  {% endif %}
+
+                  <div class="client-form-field{% if form.deliveryPointCustomerInstructions.vars.errors|length > 0 %} has-error{% endif %}">
+                    {{ form_label(form.deliveryPointCustomerInstructions, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                    {{ form_widget(form.deliveryPointCustomerInstructions, {'attr': {'class': 'client-form-control'}}) }}
+                    <p class="muted small">Exemple : heure d’arrivée, vol, barge, repère ou personne à appeler.</p>
+                    {% if form.deliveryPointCustomerInstructions.vars.errors|length > 0 %}
+                      <div class="client-form-errors">{{ form_errors(form.deliveryPointCustomerInstructions) }}</div>
+                    {% endif %}
+                  </div>
+                  </div>
+                {% endif %}
+
+                {% if form.deliveryPointId.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.deliveryPointId) }}</div>
+                {% endif %}
+              </div>
+            {% endif %}
+
+            <div class="delivery-current-card cart-address-card" data-standard-delivery-summary{% if uses_delivery_point_mode %} hidden{% endif %}>
+              <div class="cart-address-card__head">
+                <strong>Adresse de livraison utilisée</strong>
+                <button
+                  type="button"
+                  class="btn btn-link address-edit-btn"
+                  id="edit-delivery-address"
+                  aria-label="Modifier cette adresse de livraison"
+                  title="Modifier cette adresse de livraison"
+                >Changer</button>
+              </div>
+              <p class="muted small" style="margin:6px 0 0;" data-delivery-current-address>
+                {{ form.address.vars.value ?: 'Adresse à compléter' }}
+              </p>
+              <p class="muted small" style="margin:2px 0 0;" data-delivery-current-locality>
+                {{ form.localityText.vars.value ? 'Localité : ' ~ form.localityText.vars.value : 'Localité : non renseignée' }}
+              </p>
+              <p class="muted small" style="margin:2px 0 0;" data-delivery-current-commune>
+                {{ form.postalCode.vars.value ? form.postalCode.vars.value ~ ' ' : '' }}{{ form.commune.vars.value ?: 'Commune à choisir' }}
+              </p>
+              <p class="muted small" style="margin:2px 0 0;" data-delivery-current-instructions>
+                Instructions : non renseignées
+              </p>
+              {% set current_gps_latitude = form.gpsLatitude.vars.value|default('') %}
+              {% set current_gps_longitude = form.gpsLongitude.vars.value|default('') %}
+              {% set current_gps_accuracy = form.gpsAccuracyMeters.vars.value|default('') %}
+              <div class="muted small cart-address-gps-line" style="margin:2px 0 0;" data-delivery-current-gps>
+                <span class="cart-address-gps-label">GPS :</span>
+                {% if current_gps_latitude and current_gps_longitude %}
+                  <span class="cart-address-gps-value">
+                    {{ current_gps_latitude }}, {{ current_gps_longitude }}{% if current_gps_accuracy %} (~{{ current_gps_accuracy|round }} m){% endif %}
+                  </span>
+                {% else %}
+                  <button type="button" class="cart-address-gps-inline-btn" data-open-gps-field>Position GPS</button>
+                {% endif %}
+              </div>
+
+              <div class="cart-delivery-schedule cart-delivery-schedule--address" data-delivery-schedule {% if not schedule_preview or schedule_preview.isActive is same as(false) %}hidden{% endif %}>
+                <div class="cart-delivery-schedule-kicker">Planning de livraison</div>
+                <div class="cart-delivery-schedule-title" data-delivery-schedule-title>{{ schedule_preview.message|default('') }}</div>
+                <div class="cart-delivery-schedule-row" data-delivery-schedule-next-row {% if not schedule_preview or not schedule_preview.nextDeliveryDateLabel|default(null) %}hidden{% endif %}>
+                  <span>Prochain passage possible</span>
+                  <strong data-delivery-schedule-next>{{ schedule_preview.nextDeliveryDateLabel|default('') }}</strong>
+                </div>
+                <div class="cart-delivery-schedule-row" data-delivery-schedule-cutoff-row {% if not schedule_preview or not schedule_preview.cutoffLabel|default(null) %}hidden{% endif %}>
+                  <span>Pour ce passage</span>
+                  <strong data-delivery-schedule-cutoff>{{ schedule_preview.cutoffLabel|default('') }}</strong>
+                </div>
+                <p class="cart-delivery-schedule-confirmation" data-delivery-schedule-confirmation>{{ schedule_preview.confirmationLabel|default('La date finale est confirmée par Hodina après vérification des vendeurs.') }}</p>
+              </div>
+
+              {% if has_appointment_delivery_promise %}
+                <div class="cart-appointment-promise-note" data-cart-appointment-promise-note>
+                  <strong>Produit sur créneau dans ce panier</strong>
+                  <p>Hodina confirmera l’heure exacte avec toi après validation. Les frais et le passage de livraison restent calculés selon ton adresse.</p>
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="delivery-point-current-card cart-address-card" data-delivery-point-current-card{% if not uses_delivery_point_mode %} hidden{% endif %}>
+              <div class="cart-address-card__head">
+                <strong>Point de remise choisi</strong>
+              </div>
+              <p class="muted small" style="margin:6px 0 0;" data-delivery-point-current-name>Point de remise à choisir</p>
+              <p class="muted small" style="margin:2px 0 0;" data-delivery-point-current-address></p>
+              <p class="muted small" style="margin:2px 0 0;" data-delivery-point-current-commune></p>
+              <p class="muted small" style="margin:2px 0 0;" data-delivery-point-current-appointment>Rendez-vous à préciser.</p>
+              <p class="muted small" style="margin:2px 0 0;" data-delivery-point-current-instructions></p>
+            </div>
+            {% set delivery_picker_open = not form.address.vars.value or form.address.vars.errors|length > 0 or form.commune.vars.errors|length > 0 or form.postalCode.vars.errors|length > 0 or form.zone.vars.errors|length > 0 %}
+            <div
+              class="address-picker-sheet{{ delivery_picker_open ? ' is-open' : '' }}"
+              id="checkout-address-details"
+              data-address-picker="delivery"
+              data-standard-delivery-picker
+              {% if uses_delivery_point_mode %}hidden{% endif %}
+              role="dialog"
+              aria-modal="true"
+              aria-hidden="{{ delivery_picker_open ? 'false' : 'true' }}"
+              aria-labelledby="delivery-picker-title"
+            >
+              <button type="button" class="address-picker-backdrop" data-close-address-picker aria-label="Fermer le choix de l'adresse de livraison"></button>
+              <div class="address-picker-panel" role="document" tabindex="-1">
+                <div class="address-picker-head">
+                  <div>
+                    <h3 id="delivery-picker-title">Choisir une adresse de livraison</h3>
+                    <p class="muted small">Sélectionne une adresse, ajuste les champs si besoin, puis clique sur Utiliser.</p>
+                  </div>
+                  <button type="button" class="address-picker-close" data-close-address-picker aria-label="Fermer">×</button>
+                </div>
+                <div class="address-picker-content">
+
+            {% if app.user and customerAddresses is not empty %}
+              <div class="point" style="margin-bottom:12px;">
+                <strong>Mes adresses de livraison</strong>
+                <p class="muted small" style="margin:6px 0 10px;">
+                  Appuie sur une carte pour préremplir les champs. Tu peux ensuite ajouter la position GPS, corriger les informations ou choisir de l’utiliser par défaut avant de confirmer.
+                </p>
+
+                <div class="saved-addresses">
+                  {% for addr in customerAddresses %}
+                    {% set is_default_address = defaultDeliveryAddress is defined and defaultDeliveryAddress and addr.id == defaultDeliveryAddress.id %}
+                    {% set is_selected_address = form.existingAddressId.vars.value is not empty and addr.id == form.existingAddressId.vars.value %}
+                    <article
+                      class="saved-address-btn{{ is_default_address ? ' is-default' : '' }}{{ is_selected_address ? ' is-selected' : '' }}"
+                      data-address-card="delivery"
+                      role="button"
+                      tabindex="0"
+                      aria-pressed="{{ is_selected_address ? 'true' : 'false' }}"
+                      data-address-id="{{ addr.id }}"
+                      data-line1="{{ addr.line1|e('html_attr') }}"
+                      data-postal-code="{{ addr.postalCode|e('html_attr') }}"
+                      data-commune="{{ addr.commune|e('html_attr') }}"
+                      data-locality-id="{{ addr.addressLocality ? addr.addressLocality.id : '' }}"
+                      data-locality-text="{{ addr.localityLabel|default('')|e('html_attr') }}"
+                      data-zone="{{ addr.deliveryZone ? addr.deliveryZone.code : 'GT' }}"
+                      data-delivery-instructions="{{ addr.deliveryInstructions|e('html_attr') }}"
+                      data-gps-latitude="{{ addr.gpsLatitude }}"
+                      data-gps-longitude="{{ addr.gpsLongitude }}"
+                      data-gps-accuracy="{{ addr.gpsAccuracyMeters }}"
+                      style="display:block; text-align:left;"
+                    >
+                      <button
+                        type="button"
+                        class="btn btn-link address-edit-btn saved-address-edit-btn"
+                        data-edit-delivery-address
+                        data-address-id="{{ addr.id }}"
+                        aria-label="Modifier cette adresse de livraison"
+                        title="Modifier cette adresse de livraison"
+                      >Modifier</button>
+                      <strong>{{ addr.label ?: (is_default_address ? 'Adresse de livraison par défaut' : 'Adresse de livraison') }}</strong><br>
+                      <span class="muted small">{{ addr.line1 }}</span>
+                      {% if addr.localityLabel %}
+                        <br><span class="muted small">Localité : {{ addr.localityLabel }}</span>
+                      {% endif %}
+                      <br><span class="muted small">{{ addr.postalCode }} {{ addr.commune }}</span>
+                      {% if addr.deliveryInstructions %}
+                        <br><span class="muted small">Instructions enregistrées</span>
+                      {% endif %}
+                      {% if addr.gpsMapUrl %}
+                        <br><span class="muted small">GPS enregistré</span>
+                      {% endif %}
+                      {% if is_default_address %}
+                        <br><span class="muted small">Adresse de livraison par défaut</span>
+                      {% endif %}
+                    </article>
+                  {% endfor %}
+                </div>
+
+              </div>
+            {% endif %}
+
+            <button type="button" class="btn btn-secondary" id="use-new-address" style="margin-bottom:12px;">
+              {{ app.user and customerAddresses is not empty ? 'Utiliser une nouvelle adresse de livraison' : 'Ajouter une adresse de livraison' }}
+            </button>
+
+            <div id="checkout-address-block">
+              <h3 style="margin-top:0;">Adresse de livraison</h3>
+
+              <div class="client-form-field{% if form.address.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.address, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.address, {'attr': {'class': 'client-form-control'}}) }}
+                {% if form.address.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.address) }}</div>
+                {% endif %}
+              </div>
+
+
+              <div class="client-form-field{% if form.localityText.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.localityText, 'Localité', {'label_attr': {'class': 'client-form-label'}}) }}
+                <p class="muted small" style="margin:0 0 6px;">Village / quartier / lieu-dit</p>
+                {{ form_widget(form.localityText, {'attr': {'class': 'client-form-control', 'list': 'checkout-address-locality-suggestions', 'data-address-locality-text': '1'}}) }}
+                <div class="address-locality-suggestion-list" data-address-locality-suggestions hidden></div>
+                <p class="muted small">Facultatif. Tape au moins 2 lettres pour choisir une localité Hodina. La commune livrée reste la référence pour les frais.</p>
+                {% if form.localityText.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.localityText) }}</div>
+                {% endif %}
+              </div>
+
+              <div class="client-form-field{% if form.postalCode.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.postalCode, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.postalCode, {'attr': {'class': 'client-form-control'}}) }}
+                <p class="muted small">Choisis un code postal connu par Hodina. La liste des communes se limite ensuite aux communes compatibles.</p>
+                {% if form.postalCode.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.postalCode) }}</div>
+                {% endif %}
+              </div>
+
+              <div class="client-form-field{% if form.commune.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.commune, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.commune, {'attr': {'class': 'client-form-control'}}) }}
+                <p class="muted small">Choisis la commune exacte de livraison. Elle reste la base des frais, jamais le code postal seul.</p>
+                {% if form.commune.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.commune) }}</div>
+                {% endif %}
+              </div>
+
+              {{ form_widget(form.zone) }}
+              {{ form_widget(form.gpsLatitude) }}
+              {{ form_widget(form.gpsLongitude) }}
+              {{ form_widget(form.gpsAccuracyMeters) }}
+              {{ form_widget(form.customerTimezone) }}
+
+              <div class="client-form-field{% if form.deliveryInstructions.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.deliveryInstructions, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.deliveryInstructions, {'attr': {'class': 'client-form-control'}}) }}
+                <p class="muted small">Facultatif. Exemple : près du centre commercial Baobab, portail bleu, appeler en arrivant.</p>
+                {% if form.deliveryInstructions.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.deliveryInstructions) }}</div>
+                {% endif %}
+              </div>
+
+              <div class="client-form-field">
+                <label class="client-form-label" for="delivery-gps-coordinates">Position GPS de livraison</label>
+                <div class="gps-field-row">
+                  <button type="button" class="btn btn-secondary gps-location-btn" id="use-current-location">Utiliser ma position actuelle</button>
+                  <input
+                    type="text"
+                    id="delivery-gps-coordinates"
+                    class="client-form-control gps-coordinates-input"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    placeholder="Ex. -12.7806000, 45.2278000"
+                    value="{% if form.gpsLatitude.vars.value and form.gpsLongitude.vars.value %}{{ form.gpsLatitude.vars.value }}, {{ form.gpsLongitude.vars.value }}{% endif %}"
+                    aria-describedby="delivery-gps-help"
+                  >
+                </div>
+                <div class="muted small gps-status" data-gps-status>Position GPS non renseignée.</div>
+                <p id="delivery-gps-help" class="muted small">Facultatif mais recommandé à Mayotte. Le livreur pourra ouvrir la position dans Google Maps. Tu peux aussi saisir les coordonnées manuellement au format latitude, longitude.</p>
+              </div>
+
+              <div class="client-form-field{% if form.makeDeliveryDefault.vars.errors|length > 0 %} has-error{% endif %}">
+                <label class="client-form-label" style="display:flex; gap:10px; align-items:flex-start;">
+                  {{ form_widget(form.makeDeliveryDefault) }}
+                  <span>Utiliser cette adresse par défaut</span>
+                </label>
+                <p class="muted small">Coche cette option si tu veux reprendre cette adresse automatiquement pour les prochaines livraisons.</p>
+                {% if form.makeDeliveryDefault.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.makeDeliveryDefault) }}</div>
+                {% endif %}
+              </div>
+            </div>
+                </div>
+                <div class="address-picker-actions">
+                  <button type="button" class="btn btn-primary address-picker-use" data-use-address-picker="delivery">Utiliser cette adresse de livraison</button>
+                  <button type="button" class="btn btn-secondary address-picker-cancel" data-close-address-picker>Fermer</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="summary-card cart-step cart-step--billing" aria-labelledby="cart-step-billing-title">
+            <div class="cart-step-head">
+              <span class="cart-step-index">4</span>
+              <div>
+                <h2 id="cart-step-billing-title" class="cart-step-title">Facturation</h2>
+                <p class="cart-step-sub muted">Confirme l’adresse utilisée pour la facture.</p>
+              </div>
+            </div>
+            <div class="billing-current-card cart-address-card">
+              <div class="cart-address-card__head">
+                <strong>Adresse de facturation utilisée</strong>
+                <button
+                  type="button"
+                  class="btn btn-link address-edit-btn"
+                  id="edit-billing-address"
+                  aria-label="Modifier cette adresse de facturation"
+                  title="Modifier cette adresse de facturation"
+                >Changer</button>
+              </div>
+              <p class="muted small" style="margin:6px 0 0;" data-billing-current-address>
+                {{ form.billingAddress.vars.value ?: 'Adresse de facturation à compléter' }}
+              </p>
+              <p class="muted small" style="margin:2px 0 0;" data-billing-current-commune>
+                {{ form.billingPostalCode.vars.value ? form.billingPostalCode.vars.value ~ ' ' : '' }}{{ form.billingCommune.vars.value ?: '' }}
+              </p>
+            </div>
+
+            {% set billing_picker_open = form.billingAddress.vars.errors|length > 0 or form.billingPostalCode.vars.errors|length > 0 or form.billingCommune.vars.errors|length > 0 or form.billingZone.vars.errors|length > 0 %}
+            <div
+              class="address-picker-sheet{{ billing_picker_open ? ' is-open' : '' }}"
+              id="checkout-billing-details"
+              data-address-picker="billing"
+              role="dialog"
+              aria-modal="true"
+              aria-hidden="{{ billing_picker_open ? 'false' : 'true' }}"
+              aria-labelledby="billing-picker-title"
+            >
+              <button type="button" class="address-picker-backdrop" data-close-address-picker aria-label="Fermer le choix de l'adresse de facturation"></button>
+              <div class="address-picker-panel" role="document" tabindex="-1">
+                <div class="address-picker-head">
+                  <div>
+                    <h3 id="billing-picker-title">Choisir une adresse de facturation</h3>
+                    <p class="muted small">Sélectionne une adresse, ajuste les champs si besoin, puis clique sur Utiliser.</p>
+                  </div>
+                  <button type="button" class="address-picker-close" data-close-address-picker aria-label="Fermer">×</button>
+                </div>
+                <div class="address-picker-content">
+
+              {% if app.user and billingAddresses is defined and billingAddresses is not empty %}
+                <div class="point" style="margin-bottom:12px;">
+                  <strong>Mes adresses de facturation</strong>
+                  <div class="saved-addresses">
+                    {% for addr in billingAddresses %}
+                      {% set is_default_billing = billingAddress is defined and billingAddress and addr.id == billingAddress.id %}
+                      {% set is_selected_billing = form.billingExistingAddressId.vars.value is not empty and addr.id == form.billingExistingAddressId.vars.value %}
+                      <article
+                        class="saved-address-btn{{ is_default_billing ? ' is-default' : '' }}{{ is_selected_billing ? ' is-selected' : '' }}"
+                        data-address-card="billing"
+                        role="button"
+                        tabindex="0"
+                        aria-pressed="{{ is_selected_billing ? 'true' : 'false' }}"
+                        data-billing-address-id="{{ addr.id }}"
+                        data-billing-line1="{{ addr.line1|e('html_attr') }}"
+                        data-billing-postal-code="{{ addr.postalCode|e('html_attr') }}"
+                        data-billing-commune="{{ addr.commune|e('html_attr') }}"
+                        data-billing-zone="{{ addr.deliveryZone ? addr.deliveryZone.code : 'AUTRE' }}"
+                        style="display:block; text-align:left;"
+                      >
+                        <button
+                          type="button"
+                          class="btn btn-link address-edit-btn saved-address-edit-btn"
+                          data-edit-billing-address
+                          data-billing-address-id="{{ addr.id }}"
+                          aria-label="Modifier cette adresse de facturation"
+                          title="Modifier cette adresse de facturation"
+                        >Modifier</button>
+                        <strong>{{ addr.label ?: (is_default_billing ? 'Adresse de facturation par défaut' : 'Adresse de facturation') }}</strong><br>
+                        <span class="muted small">{{ addr.line1 }}</span>
+                        <br><span class="muted small">{{ addr.postalCode }} {{ addr.commune }}</span>
+                        {% if is_default_billing %}
+                          <br><span class="muted small">Adresse de facturation par défaut</span>
+                        {% endif %}
+                      </article>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+
+              <button type="button" class="btn btn-secondary" id="use-new-billing-address" style="margin-bottom:12px;">
+                {{ app.user and billingAddresses is defined and billingAddresses is not empty ? 'Utiliser une nouvelle adresse de facturation' : 'Ajouter une adresse de facturation' }}
+              </button>
+
+              <div id="checkout-billing-fields">
+                <h3 style="margin-top:0;">Adresse de facturation</h3>
+                <div style="display:none;">{{ form_widget(form.useBillingSameAsDelivery) }}</div>
+                <div class="client-form-field{% if form.billingAddress.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.billingAddress, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.billingAddress, {'attr': {'class': 'client-form-control'}}) }}
+                  {% if form.billingAddress.vars.errors|length > 0 %}
+                    <div class="client-form-errors">{{ form_errors(form.billingAddress) }}</div>
+                  {% endif %}
+                </div>
+                <div class="client-form-field{% if form.billingPostalCode.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.billingPostalCode, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.billingPostalCode, {'attr': {'class': 'client-form-control'}}) }}
+                  {% if form.billingPostalCode.vars.errors|length > 0 %}
+                    <div class="client-form-errors">{{ form_errors(form.billingPostalCode) }}</div>
+                  {% endif %}
+                </div>
+                <div class="client-form-field{% if form.billingCommune.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.billingCommune, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.billingCommune, {'attr': {'class': 'client-form-control'}}) }}
+                  {% if form.billingCommune.vars.errors|length > 0 %}
+                    <div class="client-form-errors">{{ form_errors(form.billingCommune) }}</div>
+                  {% endif %}
+                </div>
+                <div style="display:none;">
+                  {{ form_widget(form.billingZone) }}
+                </div>
+                {% if form.billingZone.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.billingZone) }}</div>
+                {% endif %}
+
+                <div class="client-form-field{% if form.makeBillingDefault.vars.errors|length > 0 %} has-error{% endif %}">
+                  <label class="client-form-label" style="display:flex; gap:10px; align-items:flex-start;">
+                    {{ form_widget(form.makeBillingDefault) }}
+                    <span>Utiliser cette adresse par défaut</span>
+                  </label>
+                  <p class="muted small">Coche cette option si tu veux reprendre cette adresse automatiquement pour les prochaines factures.</p>
+                  {% if form.makeBillingDefault.vars.errors|length > 0 %}
+                    <div class="client-form-errors">{{ form_errors(form.makeBillingDefault) }}</div>
+                  {% endif %}
+                </div>
+              </div>
+                </div>
+                <div class="address-picker-actions">
+                  <button type="button" class="btn btn-primary address-picker-use" data-use-address-picker="billing">Utiliser cette adresse de facturation</button>
+                  <button type="button" class="btn btn-secondary address-picker-cancel" data-close-address-picker>Fermer</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {% else %}
+          <section class="summary-card cart-step cart-step--guest-checkout" aria-labelledby="guest-checkout-title">
+            <div class="cart-step-head">
+              <span class="cart-step-index">3</span>
+              <div>
+                <h2 id="guest-checkout-title" class="cart-step-title">Finaliser ma commande</h2>
+                <p class="cart-step-sub muted">Première commande sur Hodina ? Renseigne juste les informations nécessaires. Ton espace client sera créé après validation.</p>
+              </div>
+            </div>
+
+            {{ form_widget(form.existingAddressId) }}
+            {{ form_widget(form.addressLocalityId) }}
+            {{ form_widget(form.confirmExistingAccount) }}
+            {{ form_widget(form.confirmedExistingAccountEmail) }}
+            {{ form_widget(form.billingExistingAddressId) }}
+            <div style="display:none;" aria-hidden="true">
+              {{ form_widget(form.makeDeliveryDefault, {'attr': {'checked': false}}) }}
+              {{ form_widget(form.makeBillingDefault, {'attr': {'checked': false}}) }}
+              {{ form_widget(form.useBillingSameAsDelivery, {'attr': {'checked': true}}) }}
+              {{ form_widget(form.billingAddress) }}
+              {{ form_widget(form.billingPostalCode) }}
+              {{ form_widget(form.billingCommune) }}
+              {{ form_widget(form.billingZone) }}
+              {{ form_widget(form.deliveryMethod) }}
+              {{ form_widget(form.deliveryPointId) }}
+              {{ form_widget(form.deliveryPointTimeWindowId) }}
+              {% if not point_options.hasDeliveryPointProducts|default(false) %}
+                {{ form_widget(form.deliveryPointRequestedDate) }}
+                {{ form_widget(form.deliveryPointRequestedTime) }}
+                {{ form_widget(form.deliveryPointCustomerInstructions) }}
+              {% endif %}
+              {{ form_widget(form.zone) }}
+              {{ form_widget(form.gpsLatitude) }}
+              {{ form_widget(form.gpsLongitude) }}
+              {{ form_widget(form.gpsAccuracyMeters) }}
+              {{ form_widget(form.customerTimezone) }}
+            </div>
+
+            <div class="guest-checkout-block">
+              <h3>Qui recevra cette commande ?</h3>
+              <p class="muted small">Ces informations servent à confirmer la commande et à organiser la livraison.</p>
+
+              <div class="guest-checkout-grid">
+                <div class="client-form-field{% if form.firstName.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.firstName, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.firstName, {'attr': {'class': 'client-form-control', 'autocomplete': 'given-name'}}) }}
+                  {% if form.firstName.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.firstName) }}</div>{% endif %}
+                </div>
+
+                <div class="client-form-field{% if form.lastName.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.lastName, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.lastName, {'attr': {'class': 'client-form-control', 'autocomplete': 'family-name'}}) }}
+                  {% if form.lastName.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.lastName) }}</div>{% endif %}
+                </div>
+
+                <div class="client-form-field client-form-field-phone{% if form.phone.vars.errors|length > 0 or form.phoneCountryCode.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.phone, 'Téléphone', {'label_attr': {'class': 'client-form-label'}}) }}
+                  <div class="phone-input-row">
+                    {{ form_widget(form.phoneCountryCode, {'attr': {'class': 'client-form-control phone-country-code', 'autocomplete': 'tel-country-code'}}) }}
+                    {{ form_widget(form.phone, {'attr': {'class': 'client-form-control phone-local-number', 'autocomplete': 'tel-national', 'inputmode': 'tel', 'placeholder': '0639 12 34 56'}}) }}
+                  </div>
+                  <p class="muted small">Choisis l’indicatif puis saisis le numéro local. Les fixes sont acceptés.</p>
+                  {% if form.phoneCountryCode.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.phoneCountryCode) }}</div>{% endif %}
+                  {% if form.phone.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.phone) }}</div>{% endif %}
+                </div>
+
+                <div class="client-form-field{% if form.email.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.email, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.email, {'attr': {'class': 'client-form-control', 'autocomplete': 'email'}}) }}
+                  <p class="muted small">Tu recevras le récapitulatif et un lien sécurisé pour créer ton mot de passe.</p>
+                  {% if form.email.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.email) }}</div>{% endif %}
+                </div>
+              </div>
+            </div>
+
+            {% set point_options = deliveryPointOptions|default({}) %}
+            {% set point_choices = deliveryPointChoices|default([]) %}
+            {% if point_options.hasDeliveryPointProducts|default(false) %}
+              <div
+                class="guest-checkout-block delivery-point-choice"
+                data-delivery-point-section
+                data-point-required="{{ point_options.requiresDeliveryPoint|default(false) ? '1' : '0' }}"
+              >
+                <h3>Point de remise</h3>
+                {% if point_options.requiresDeliveryPoint|default(false) %}
+                  <p class="muted small">Ce panier contient un produit qui impose une remise dans un point Hodina. Choisis le lieu, puis indique la date et l’heure où tu seras sur place.</p>
+                {% else %}
+                  <p class="muted small">Tu peux choisir une livraison à ton adresse ou une remise dans un point Hodina.</p>
+                  <div class="delivery-method-toggle" role="group" aria-label="Mode de livraison">
+                    <button
+                      type="button"
+                      class="delivery-method-btn{{ current_delivery_method == 'STANDARD' ? ' is-selected' : '' }}"
+                      data-delivery-method="STANDARD"
+                      aria-pressed="{{ current_delivery_method == 'STANDARD' ? 'true' : 'false' }}"
+                    >Livraison à mon adresse</button>
+                    <button
+                      type="button"
+                      class="delivery-method-btn{{ current_delivery_method == 'DELIVERY_POINT' ? ' is-selected' : '' }}"
+                      data-delivery-method="DELIVERY_POINT"
+                      aria-pressed="{{ current_delivery_method == 'DELIVERY_POINT' ? 'true' : 'false' }}"
+                    >Point de remise</button>
+                  </div>
+                {% endif %}
+
+                {% if point_options.conflictMessage|default(null) %}
+                  <div class="alert alert-warning">{{ point_options.conflictMessage }}</div>
+                {% endif %}
+
+                {% if point_choices is not empty %}
+                  <div data-delivery-point-mode-panel{% if not uses_delivery_point_mode %} hidden{% endif %}>
+                  <div class="delivery-point-cards" data-delivery-point-cards>
+                    {% for point in point_choices %}
+                      <button
+                        type="button"
+                        class="delivery-point-card"
+                        data-delivery-point-card
+                        data-point-id="{{ point.id }}"
+                        data-point-name="{{ point.name|e('html_attr') }}"
+                        data-line1="{{ point.line1|e('html_attr') }}"
+                        data-line2="{{ point.line2|default('')|e('html_attr') }}"
+                        data-postal-code="{{ point.postalCode|default('')|e('html_attr') }}"
+                        data-commune="{{ point.commune|default('')|e('html_attr') }}"
+                        data-zone="{{ point.zone|default('')|e('html_attr') }}"
+                        data-gps-latitude="{{ point.gpsLatitude|default('') }}"
+                        data-gps-longitude="{{ point.gpsLongitude|default('') }}"
+                        data-gps-accuracy="{{ point.gpsAccuracyMeters|default('') }}"
+                        data-public-instructions="{{ point.publicInstructions|default('')|e('html_attr') }}"
+                      >
+                        <span class="delivery-point-card__type">{{ point.typeLabel }}</span>
+                        <strong>{{ point.name }}</strong>
+                        <span>{{ point.line1 }}</span>
+                        <small>{{ point.postalCode }} {{ point.commune }}</small>
+                        {% if point.publicInstructions %}<small>{{ point.publicInstructions }}</small>{% endif %}
+                      </button>
+                    {% endfor %}
+                  </div>
+
+                  <div class="delivery-point-windows-help" data-delivery-point-windows-help>
+                    <strong>Horaires proposés</strong>
+                    <p class="muted small">Ces plages indiquent quand ce point peut accueillir une remise. Indique ensuite ton heure réelle d’arrivée.</p>
+                    {% if point_options.maximumOrderLeadTimeHours|default(0) > 0 %}
+                      <div class="alert alert-info">Certains produits de ton panier doivent être commandés au moins {{ point_options.maximumOrderLeadTimeHours }} h avant le rendez-vous.</div>
+                    {% endif %}
+                    {% for point in point_choices %}
+                      <ul class="delivery-point-window-list" data-delivery-point-window-list data-point-id="{{ point.id }}" hidden>
+                        {% for window in point.timeWindows %}
+                          <li data-window-id="{{ window.id }}" data-window-label="{{ window.label|e('html_attr') }}" data-window-start="{{ window.startTime }}" data-window-end="{{ window.endTime }}" data-window-weekday="{{ window.weekday|default('') }}">
+                            {{ window.label }}
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    {% endfor %}
+                  </div>
+
+                  <div class="guest-checkout-grid delivery-point-appointment-grid">
+                    <div class="client-form-field delivery-point-appointment-field delivery-point-date-field{% if form.deliveryPointRequestedDate.vars.errors|length > 0 %} has-error{% endif %}">
+                      {{ form_label(form.deliveryPointRequestedDate, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                      <div class="delivery-point-date-control">
+                        {{ form_widget(form.deliveryPointRequestedDate, {'attr': {'class': 'client-form-control delivery-point-date-input', 'data-delivery-point-date-input': '1'}}) }}
+                      </div>
+                      {% if form.deliveryPointRequestedDate.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.deliveryPointRequestedDate) }}</div>{% endif %}
+                    </div>
+
+                    <div class="client-form-field delivery-point-appointment-field delivery-point-slot-field{% if form.deliveryPointRequestedTime.vars.errors|length > 0 %} has-error{% endif %}" data-delivery-point-slot-field>
+                      <label class="client-form-label">Créneau de remise</label>
+                      {{ form_widget(form.deliveryPointRequestedTime, {'attr': {'data-delivery-point-time-input': '1'}}) }}
+                      <div class="delivery-point-slot-control">
+                        <select class="client-form-control delivery-point-slot-select" data-delivery-point-slot-select disabled aria-disabled="true">
+                          <option value="">Choisis d’abord une date</option>
+                        </select>
+                      </div>
+                      <p class="muted small" data-delivery-point-slot-help>Choisis une date pour afficher les créneaux disponibles.</p>
+                      {% if form.deliveryPointRequestedTime.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.deliveryPointRequestedTime) }}</div>{% endif %}
+                    </div>
+                  </div>
+
+                  {% if form.deliveryPointTimeWindowId.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.deliveryPointTimeWindowId) }}</div>{% endif %}
+
+                  <div class="client-form-field{% if form.deliveryPointCustomerInstructions.vars.errors|length > 0 %} has-error{% endif %}">
+                    {{ form_label(form.deliveryPointCustomerInstructions, 'Instruction pour la remise', {'label_attr': {'class': 'client-form-label'}}) }}
+                    {{ form_widget(form.deliveryPointCustomerInstructions, {'attr': {'class': 'client-form-control'}}) }}
+                    <p class="muted small">Exemple : j’arrive par le vol de 18h40, je serai devant l’accueil passager.</p>
+                    {% if form.deliveryPointCustomerInstructions.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.deliveryPointCustomerInstructions) }}</div>{% endif %}
+                  </div>
+                {% endif %}
+
+                {% if form.deliveryPointId.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.deliveryPointId) }}</div>
+                {% endif %}
+              </div>
+            {% endif %}
+
+            <div class="guest-checkout-block" data-standard-delivery-block{% if uses_delivery_point_mode %} hidden{% endif %}>
+              <h3>Où souhaitez-vous recevoir votre commande ?</h3>
+              <p class="muted small">À Mayotte, ajoute un repère utile si l’adresse est difficile à trouver.</p>
+
+              <div class="client-form-field{% if form.address.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.address, 'Adresse ou repère de livraison', {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.address, {'attr': {'class': 'client-form-control', 'placeholder': 'Ex. près du rond-point, portail bleu…'}}) }}
+                {% if form.address.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.address) }}</div>{% endif %}
+              </div>
+
+
+              <div class="client-form-field{% if form.localityText.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.localityText, 'Localité', {'label_attr': {'class': 'client-form-label'}}) }}
+                <p class="muted small" style="margin:0 0 6px;">Village / quartier / lieu-dit</p>
+                {{ form_widget(form.localityText, {'attr': {'class': 'client-form-control', 'list': 'checkout-address-locality-suggestions', 'data-address-locality-text': '1'}}) }}
+                <div class="address-locality-suggestion-list" data-address-locality-suggestions hidden></div>
+                <p class="muted small">Facultatif. Tape au moins 2 lettres pour choisir une localité Hodina. La commune livrée reste la référence pour les frais.</p>
+                {% if form.localityText.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.localityText) }}</div>
+                {% endif %}
+              </div>
+
+              <div class="client-form-field{% if form.postalCode.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.postalCode, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.postalCode, {'attr': {'class': 'client-form-control'}}) }}
+                <p class="muted small">Choisis un code postal connu par Hodina. Les communes proposées seront compatibles avec ce code postal.</p>
+                {% if form.postalCode.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.postalCode) }}</div>{% endif %}
+              </div>
+
+              <div class="client-form-field{% if form.commune.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.commune, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.commune, {'attr': {'class': 'client-form-control'}}) }}
+                <p class="muted small">La commune choisie reste la référence pour calculer les frais de livraison.</p>
+                {% if form.commune.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.commune) }}</div>{% endif %}
+              </div>
+
+              <div class="client-form-field{% if form.deliveryInstructions.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.deliveryInstructions, 'Consigne pour le livreur', {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.deliveryInstructions, {'attr': {'class': 'client-form-control'}}) }}
+                <p class="muted small">Facultatif. Exemple : appeler en arrivant, entrée côté mer, demander Mariama.</p>
+                {% if form.deliveryInstructions.vars.errors|length > 0 %}<div class="client-form-errors">{{ form_errors(form.deliveryInstructions) }}</div>{% endif %}
+              </div>
+
+              <div class="client-form-field">
+                <label class="client-form-label" for="delivery-gps-coordinates">Position GPS optionnelle</label>
+                <div class="gps-field-row">
+                  <button type="button" class="btn btn-secondary gps-location-btn" id="use-current-location">Utiliser ma position actuelle</button>
+                  <input
+                    type="text"
+                    id="delivery-gps-coordinates"
+                    class="client-form-control gps-coordinates-input"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    placeholder="Ex. -12.7806000, 45.2278000"
+                    value="{% if form.gpsLatitude.vars.value and form.gpsLongitude.vars.value %}{{ form.gpsLatitude.vars.value }}, {{ form.gpsLongitude.vars.value }}{% endif %}"
+                    aria-describedby="delivery-gps-help"
+                  >
+                </div>
+                <div class="muted small gps-status" data-gps-status>Position GPS non renseignée.</div>
+                <p id="delivery-gps-help" class="muted small">Facultatif, mais très utile pour aider le livreur.</p>
+              </div>
+            </div>
+          </section>
+          {% endif %}
+          <section class="summary-card cart-step cart-step--validation" aria-labelledby="cart-step-validation-title">
+            <div class="cart-step-head">
+              <span class="cart-step-index">5</span>
+              <div>
+                <h2 id="cart-step-validation-title" class="cart-step-title">Validation</h2>
+                <p class="cart-step-sub muted">Accepte les conditions puis valide ta commande. Paiement manuel pendant le pilote.</p>
+              </div>
+            </div>
+
+            <p class="muted small cart-note">
+              {% if salesOpening.isCartLocked %}
+                {{ salesOpening.cartLockedMessage }}
+              {% else %}
+                Paiement manuel pendant le pilote. Validation admin avant livraison.
+              {% endif %}
+            </p>
+
+            <div class="point cart-terms-card">
+              <label class="cart-terms-label">
+                {{ form_widget(form.acceptTerms) }}
+                <span>
+                  J’accepte les
+                  <a href="{{ path('app_cgv') }}" target="_blank" rel="noopener">Conditions Générales de Vente</a>
+                  et les
+                  <a href="{{ path('app_cgu') }}" target="_blank" rel="noopener">Conditions Générales d’Utilisation</a>
+                  de Hodina.
+                </span>
+              </label>
+              {{ form_errors(form.acceptTerms) }}
+            </div>
+
+            {% if salesOpening.isCartLocked %}
+              <button class="btn btn-primary" type="button" disabled>Commandes temporairement suspendues</button>
+            {% else %}
+              <button id="checkout-submit" class="btn btn-primary btn-checkout-main" type="submit" data-checkout-submit disabled>
+                Valider ma commande
+              </button>
+            {% endif %}
+
+            <p class="muted small checkout-submit-helper" style="margin-top:10px;" data-checkout-submit-helper>
+              Le bouton s’active quand les informations de livraison sont complètes et que le total a été recalculé.
+            </p>
+          </section>
+
+          {% if showExistingAccountConfirmation|default(false) %}
+            {% set existing_account_email_label = existingAccountEmail|default('') %}
+            {% if existing_account_email_label is empty %}
+              {% set existing_account_email_label = form.email.vars.value|default('') %}
+            {% endif %}
+            <div
+              class="checkout-existing-account-modal"
+              data-existing-account-confirmation-modal
+              data-existing-account-email="{{ existing_account_email_label|e('html_attr') }}"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="existing-account-confirmation-title"
+            >
+              <div class="checkout-existing-account-modal__backdrop" data-existing-account-edit-email></div>
+              <div class="checkout-existing-account-modal__panel">
+                <p class="checkout-existing-account-modal__eyebrow">Compte Hodina déjà existant</p>
+                <h3 id="existing-account-confirmation-title">Confirme le rattachement de cette commande</h3>
+                <p>
+                  Cette adresse e-mail est déjà connue de Hodina.
+                  Ta commande sera rattachée au compte existant associé à cette adresse.
+                </p>
+                <p class="muted small">
+                  Tu recevras le suivi de commande par e-mail. Aucune nouvelle fiche client ne sera créée.
+                </p>
+                <div class="checkout-existing-account-modal__email">
+                  {{ existing_account_email_label }}
+                </div>
+                <div class="checkout-existing-account-modal__actions">
+                  <button type="button" class="btn btn-primary" data-existing-account-confirm>
+                    Confirmer et valider ma commande
+                  </button>
+                  <button type="button" class="btn btn-secondary" data-existing-account-edit-email>
+                    Modifier mon e-mail
+                  </button>
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="cart-mobile-sticky-summary" aria-live="polite">
+          <div class="cart-mobile-sticky-summary__row">
+            <div class="cart-mobile-sticky-summary__amount">
+              <strong data-cart-mobile-total>
+                {% if logisticsPreview is defined and logisticsPreview and logisticsPreview.estimatedDeliveryFee is not null %}
+                  {{ (cart.total + logisticsPreview.estimatedDeliveryFee)|number_format(2, ',', ' ') }} €
+                {% else %}
+                  {{ cart.total|number_format(2, ',', ' ') }} €
+                {% endif %}
+              </strong>
+              <span data-cart-mobile-delivery>
+                {% if logisticsPreview is defined and logisticsPreview and logisticsPreview.estimatedDeliveryFee is not null %}
+                  livraison incluse
+                {% else %}
+                  hors livraison
+                {% endif %}
+              </span>
+            </div>
+            {% if salesOpening.isCartLocked %}
+              <button class="btn btn-primary" type="button" disabled>Commandes suspendues</button>
+            {% else %}
+              <button class="btn btn-primary" type="submit" data-checkout-submit disabled>Valider</button>
+            {% endif %}
+          </div>
+        </div>
+      {{ form_end(form) }}
+
+    <script>
+      (function () {
+        const form = document.getElementById('checkout-form');
+        if (!form) return;
+
+        const updateUrl = form.dataset.cartUpdateUrl;
+        let syncTimer = null;
+        let syncAbortController = null;
+
+        const formatEuro = (amount) => {
+          return new Intl.NumberFormat('fr-FR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          }).format(amount) + ' €';
+        };
+
+        const clamp = (n) => {
+          n = parseInt(n, 10);
+          if (Number.isNaN(n) || n < 0) n = 0;
+          if (n > 99) n = 99;
+          return n;
+        };
+
+        const syncCartToSession = () => {
+          if (!updateUrl || !window.fetch) return;
+
+          if (syncAbortController) {
+            syncAbortController.abort();
+          }
+
+          syncAbortController = new AbortController();
+          window.dispatchEvent(new CustomEvent('hodina:cart-sync-started'));
+
+          const body = new URLSearchParams();
+          form.querySelectorAll('[data-qty]').forEach(input => {
+            body.set(input.name, input.value || '0');
+          });
+
+          fetch(updateUrl, {
+            method: 'POST',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+            },
+            body,
+            signal: syncAbortController.signal
+          })
+            .then(() => window.dispatchEvent(new CustomEvent('hodina:cart-synced')))
+            .catch((error) => {
+              if (error && error.name === 'AbortError') return;
+              window.dispatchEvent(new CustomEvent('hodina:cart-sync-failed'));
+            });
+        };
+
+        const scheduleCartSync = () => {
+          if (syncTimer) {
+            window.clearTimeout(syncTimer);
+          }
+
+          syncTimer = window.setTimeout(syncCartToSession, 350);
+        };
+
+        const refreshTotals = () => {
+          let totalQty = 0;
+          let cartTotal = 0;
+
+          document.querySelectorAll('[data-cart-stepper]').forEach(stepper => {
+            const input = stepper.querySelector('[data-qty]');
+            const card = stepper.closest('.cart-card');
+            const lineTotalEl = card ? card.querySelector('[data-line-total]') : null;
+
+            if (!input || !lineTotalEl) return;
+
+            const qty = clamp(input.value);
+            const unitPrice = parseFloat(String(lineTotalEl.dataset.unitPrice).replace(',', '.')) || 0;
+            const lineTotal = qty * unitPrice;
+
+            input.value = String(qty);
+            lineTotalEl.textContent = formatEuro(lineTotal);
+
+            totalQty += qty;
+            cartTotal += lineTotal;
+          });
+
+          const totalQtyEl = document.querySelector('[data-cart-total-qty]');
+          const cartTotalEl = document.querySelector('[data-cart-total]');
+          const checkoutProductsTotalEl = document.querySelector('[data-checkout-products-total]');
+
+          if (totalQtyEl) totalQtyEl.textContent = String(totalQty);
+          if (cartTotalEl) cartTotalEl.textContent = formatEuro(cartTotal);
+          if (checkoutProductsTotalEl) {
+            checkoutProductsTotalEl.textContent = formatEuro(cartTotal);
+            checkoutProductsTotalEl.dataset.productsTotal = String(cartTotal.toFixed(2));
+          }
+
+          const mobileTotalEl = document.querySelector('[data-cart-mobile-total]');
+          const logisticsTotalEl = document.querySelector('[data-logistics-total]');
+          if (mobileTotalEl && (!logisticsTotalEl || !logisticsTotalEl.textContent.trim())) {
+            mobileTotalEl.textContent = formatEuro(cartTotal);
+          }
+        };
+
+        document.querySelectorAll('[data-cart-stepper]').forEach(stepper => {
+          const input = stepper.querySelector('[data-qty]');
+          const minus = stepper.querySelector('[data-minus]');
+          const plus = stepper.querySelector('[data-plus]');
+
+          if (!input || !minus || !plus) return;
+
+          const sync = (v) => {
+            input.value = String(clamp(v));
+            refreshTotals();
+            scheduleCartSync();
+          };
+
+          minus.addEventListener('click', () => sync(clamp(input.value) - 1));
+          plus.addEventListener('click', () => sync(clamp(input.value) + 1));
+
+          input.addEventListener('input', () => {
+            refreshTotals();
+            scheduleCartSync();
+          });
+          input.addEventListener('blur', () => sync(input.value));
+        });
+
+        document.querySelectorAll('[data-remove-line]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const productId = btn.dataset.productId;
+            const input = form.querySelector(`[name="qty[${productId}]"]`);
+
+            if (input) {
+              input.value = '0';
+              refreshTotals();
+              form.action = updateUrl;
+              form.noValidate = true;
+              form.submit();
+            }
+          });
+        });
+
+        const clearBtn = document.querySelector('[data-clear-cart]');
+        if (clearBtn) {
+          clearBtn.addEventListener('click', () => {
+            form.querySelectorAll('[data-qty]').forEach(input => {
+              input.value = '0';
+            });
+
+            refreshTotals();
+            form.action = updateUrl;
+            form.noValidate = true;
+            form.submit();
+          });
+        }
+
+        refreshTotals();
+      })();
+    </script>
+
+    <script>
+(function(){
+  const form = document.getElementById('checkout-form');
+  if(!form) return;
+
+  const submitButtons = Array.from(form.querySelectorAll('[data-checkout-submit]'));
+  if(submitButtons.length === 0) return;
+
+  const existingAccountModal = document.querySelector('[data-existing-account-confirmation-modal]');
+  const existingAccountConfirmButton = existingAccountModal ? existingAccountModal.querySelector('[data-existing-account-confirm]') : null;
+  const existingAccountEditButtons = existingAccountModal ? Array.from(existingAccountModal.querySelectorAll('[data-existing-account-edit-email]')) : [];
+  const confirmExistingAccountInput = form.querySelector('#checkout_confirmExistingAccount');
+  const confirmedExistingAccountEmailInput = form.querySelector('#checkout_confirmedExistingAccountEmail');
+  const emailInput = form.querySelector('#checkout_email');
+
+  let checkoutSubmitAttempted = Boolean(document.querySelector('[data-checkout-server-alert]'));
+
+  const showClientValidationAlert = () => {
+    checkoutSubmitAttempted = true;
+    refresh();
+
+    const clientAlert = document.querySelector('[data-checkout-client-alert]');
+    if (clientAlert && clientAlert.scrollIntoView) {
+      window.setTimeout(() => {
+        clientAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 30);
+    }
+  };
+
+  const hideExistingAccountModal = () => {
+    if (existingAccountModal) {
+      existingAccountModal.hidden = true;
+    }
+  };
+
+  const resetExistingAccountConfirmation = () => {
+    if (confirmExistingAccountInput) confirmExistingAccountInput.value = '0';
+    if (confirmedExistingAccountEmailInput) confirmedExistingAccountEmailInput.value = '';
+  };
+
+  const isFilled = (selector) => {
+    const el = form.querySelector(selector);
+    if (!el) return false;
+    if (el.type === 'checkbox') return el.checked;
+
+    const v = (el.value || '').trim();
+    return v.length > 0 && v !== '0';
+  };
+
+  const getValidationState = () => {
+    if (!isFilled('#checkout_firstName')) {
+      return { valid: false, reason: 'Indique le prénom de la personne qui recevra la commande.' };
+    }
+
+    if (!isFilled('#checkout_lastName')) {
+      return { valid: false, reason: 'Indique le nom de la personne qui recevra la commande.' };
+    }
+
+    if (!isFilled('#checkout_phone')) {
+      return { valid: false, reason: 'Indique un numéro de téléphone pour te joindre au moment de la livraison ou de la remise.' };
+    }
+
+    if (!isFilled('#checkout_email')) {
+      return { valid: false, reason: 'Indique ton adresse e-mail pour recevoir le récapitulatif de commande.' };
+    }
+
+    if (!isFilled('#checkout_acceptTerms')) {
+      return { valid: false, reason: 'Accepte les conditions avant de valider ta commande.' };
+    }
+
+    const deliveryMethodInput = form.querySelector('#checkout_deliveryMethod');
+    const deliveryPointSection = form.querySelector('[data-delivery-point-section]');
+    const usesDeliveryPoint = deliveryMethodInput && deliveryMethodInput.value === 'DELIVERY_POINT';
+    const pointRequired = deliveryPointSection && deliveryPointSection.dataset.pointRequired === '1';
+
+    if (usesDeliveryPoint || pointRequired) {
+      const pointInput = form.querySelector('#checkout_deliveryPointId');
+      const requestedDateInput = form.querySelector('#checkout_deliveryPointRequestedDate');
+      const requestedTimeInput = form.querySelector('#checkout_deliveryPointRequestedTime');
+
+      if (!pointInput || !(pointInput.value || '').trim()) {
+        return { valid: false, reason: 'Choisis un point de remise pour continuer.' };
+      }
+
+      if (!requestedDateInput || !(requestedDateInput.value || '').trim()) {
+        return { valid: false, reason: 'Indique la date à laquelle tu seras au point de remise.' };
+      }
+
+      if (!requestedTimeInput || !(requestedTimeInput.value || '').trim()) {
+        return { valid: false, reason: 'Choisis un créneau de remise disponible.' };
+      }
+    } else {
+      if (!isFilled('#checkout_address')) {
+        return { valid: false, reason: 'Indique l’adresse où le livreur doit te retrouver.' };
+      }
+
+      if (!isFilled('#checkout_commune') || !isFilled('#checkout_postalCode')) {
+        return { valid: false, reason: 'Choisis une commune livrée pour recalculer les frais.' };
+      }
+    }
+
+    const sameBilling = form.querySelector('#checkout_useBillingSameAsDelivery');
+    if (sameBilling && sameBilling.checked) {
+      return { valid: true, reason: '' };
+    }
+
+    const billingOk = ['#checkout_billingAddress', '#checkout_billingPostalCode', '#checkout_billingCommune', '#checkout_billingZone'].every(sel => {
+      const el = form.querySelector(sel);
+      return el && (el.value || '').trim().length > 0;
+    });
+
+    return billingOk
+      ? { valid: true, reason: '' }
+      : { valid: false, reason: 'Confirme l’adresse utilisée pour la facturation.' };
+  };
+
+  const isValid = () => getValidationState().valid;
+
+  const formatZoneLabel = (zone) => {
+    if (zone === 'PT') return 'Petite-Terre (PT)';
+    if (zone === 'GT') return 'Grande-Terre (GT)';
+    return zone || 'Choisis une commune livrée.';
+  };
+
+  const updateDeliveryCurrentSummary = () => {
+    const addressInput = form.querySelector('#checkout_address');
+    const communeInput = form.querySelector('#checkout_commune');
+    const postalInput = form.querySelector('#checkout_postalCode');
+    const localityInput = form.querySelector('#checkout_localityText');
+    const zoneInput = form.querySelector('#checkout_zone');
+    const instructionsInput = form.querySelector('#checkout_deliveryInstructions');
+    const gpsLatInput = form.querySelector('#checkout_gpsLatitude');
+    const gpsLngInput = form.querySelector('#checkout_gpsLongitude');
+    const gpsAccuracyInput = form.querySelector('#checkout_gpsAccuracyMeters');
+
+    const addressEl = document.querySelector('[data-delivery-current-address]');
+    const communeEl = document.querySelector('[data-delivery-current-commune]');
+    const localityEl = document.querySelector('[data-delivery-current-locality]');
+    const zoneEl = document.querySelector('[data-delivery-current-zone]');
+    const instructionsEl = document.querySelector('[data-delivery-current-instructions]');
+    const gpsEl = document.querySelector('[data-delivery-current-gps]');
+
+    const communeLabel = communeInput && communeInput.selectedIndex >= 0
+      ? (communeInput.options[communeInput.selectedIndex].textContent || '').replace(/\s+—\s+.*$/, '').trim()
+      : '';
+
+    const address = addressInput ? (addressInput.value || '').trim() : '';
+    const postalCode = postalInput ? (postalInput.value || '').trim() : '';
+    const locality = localityInput ? (localityInput.value || '').trim() : '';
+    const zone = zoneInput ? (zoneInput.value || '').trim() : '';
+
+    if (addressEl) addressEl.textContent = address || 'Adresse à compléter';
+    if (localityEl) localityEl.textContent = locality ? ('Localité : ' + locality) : 'Localité : non renseignée';
+    if (communeEl) communeEl.textContent = (postalCode || communeLabel)
+      ? ((postalCode ? postalCode + ' ' : '') + (communeLabel || 'Commune à choisir'))
+      : 'Commune à choisir';
+    if (zoneEl) zoneEl.textContent = formatZoneLabel(zone);
+    if (instructionsEl) {
+      const instructions = instructionsInput ? (instructionsInput.value || '').trim() : '';
+      instructionsEl.textContent = instructions ? 'Instructions : ' + instructions : 'Instructions : non renseignées';
+    }
+
+    if (gpsEl) {
+      const lat = gpsLatInput ? (gpsLatInput.value || '').trim() : '';
+      const lng = gpsLngInput ? (gpsLngInput.value || '').trim() : '';
+      const accuracy = gpsAccuracyInput ? (gpsAccuracyInput.value || '').trim() : '';
+
+      gpsEl.replaceChildren();
+
+      const label = document.createElement('span');
+      label.className = 'cart-address-gps-label';
+      label.textContent = 'GPS :';
+      gpsEl.appendChild(label);
+
+      if (lat && lng) {
+        const value = document.createElement('span');
+        value.className = 'cart-address-gps-value';
+        value.textContent = lat + ', ' + lng + (accuracy ? ' (~' + Math.round(parseFloat(accuracy)) + ' m)' : '');
+        gpsEl.appendChild(value);
+      } else {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'cart-address-gps-inline-btn';
+        button.setAttribute('data-open-gps-field', '');
+        button.textContent = 'Position GPS';
+        gpsEl.appendChild(button);
+      }
+    }
+  };
+
+  const getSelectedDeliveryPointCard = () => {
+    const pointInput = form.querySelector('#checkout_deliveryPointId');
+    const pointId = pointInput ? (pointInput.value || '').trim() : '';
+    return Array.from(form.querySelectorAll('[data-delivery-point-card]')).find((card) => card.dataset.pointId === pointId) || null;
+  };
+
+  const updateDeliveryPointCurrentSummary = () => {
+    const currentCard = document.querySelector('[data-delivery-point-current-card]');
+    if (!currentCard) return;
+
+    const selectedCard = getSelectedDeliveryPointCard();
+    const nameEl = currentCard.querySelector('[data-delivery-point-current-name]');
+    const addressEl = currentCard.querySelector('[data-delivery-point-current-address]');
+    const communeEl = currentCard.querySelector('[data-delivery-point-current-commune]');
+    const appointmentEl = currentCard.querySelector('[data-delivery-point-current-appointment]');
+    const instructionsEl = currentCard.querySelector('[data-delivery-point-current-instructions]');
+
+    if (!selectedCard) {
+      if (nameEl) nameEl.textContent = 'Point de remise à choisir';
+      if (addressEl) addressEl.textContent = '';
+      if (communeEl) communeEl.textContent = '';
+      if (appointmentEl) appointmentEl.textContent = 'Rendez-vous à préciser.';
+      if (instructionsEl) instructionsEl.textContent = '';
+      return;
+    }
+
+    const requestedDateInput = form.querySelector('#checkout_deliveryPointRequestedDate');
+    const requestedTimeInput = form.querySelector('#checkout_deliveryPointRequestedTime');
+    const customerInstructionsInput = form.querySelector('#checkout_deliveryPointCustomerInstructions');
+    const date = requestedDateInput ? (requestedDateInput.value || '').trim() : '';
+    const time = requestedTimeInput ? (requestedTimeInput.value || '').trim() : '';
+    const selectedSlot = Array.from(form.querySelectorAll('[data-delivery-point-slot-select]')).find((select) => select.value === time && !select.disabled);
+    const slotLabel = selectedSlot && selectedSlot.selectedIndex > 0 ? selectedSlot.options[selectedSlot.selectedIndex].textContent : time;
+    const publicInstructions = selectedCard.dataset.publicInstructions || '';
+    const customerInstructions = customerInstructionsInput ? (customerInstructionsInput.value || '').trim() : '';
+
+    if (nameEl) nameEl.textContent = selectedCard.dataset.pointName || 'Point de remise';
+    if (addressEl) addressEl.textContent = selectedCard.dataset.line1 || '';
+    if (communeEl) {
+      const postal = selectedCard.dataset.postalCode || '';
+      const commune = selectedCard.dataset.commune || '';
+      communeEl.textContent = (postal ? postal + ' ' : '') + commune;
+    }
+    if (appointmentEl) appointmentEl.textContent = date && time ? 'Rendez-vous : ' + date + ' à ' + time : 'Rendez-vous à préciser.';
+    if (instructionsEl) {
+      const parts = [];
+      if (publicInstructions) parts.push('Consigne du point : ' + publicInstructions);
+      if (customerInstructions) parts.push('Précision client : ' + customerInstructions);
+      instructionsEl.textContent = parts.join(' · ');
+    }
+  };
+
+  const logisticsBox = document.getElementById('checkout-logistics-preview');
+  const deliveryFeeUpdateFlash = document.querySelector('[data-delivery-fee-update-flash]');
+  let logisticsAbortController = null;
+  let cartSyncing = false;
+  let logisticsPreviewInitialized = false;
+  let lastDeliveryFeeSignature = null;
+
+  const showDeliveryFeeUpdateFlash = () => {
+    if (!deliveryFeeUpdateFlash) return;
+    deliveryFeeUpdateFlash.hidden = false;
+  };
+
+  const hideDeliveryFeeUpdateFlash = () => {
+    if (!deliveryFeeUpdateFlash) return;
+    deliveryFeeUpdateFlash.hidden = true;
+  };
+
+  document.querySelectorAll('[data-dismiss-delivery-fee-update]').forEach((button) => {
+    button.addEventListener('click', hideDeliveryFeeUpdateFlash);
+  });
+
+  const setText = (selector, value) => {
+    const el = logisticsBox ? logisticsBox.querySelector(selector) : null;
+    if (el) el.textContent = value || '';
+  };
+
+  const setHidden = (selector, hidden) => {
+    const el = logisticsBox ? logisticsBox.querySelector(selector) : null;
+    if (el) el.hidden = hidden;
+  };
+
+  const renderWarnings = (warnings) => {
+    const list = logisticsBox ? logisticsBox.querySelector('[data-logistics-warnings]') : null;
+    if (!list) return;
+
+    list.innerHTML = '';
+    (warnings || []).forEach((warning) => {
+      const li = document.createElement('li');
+      li.textContent = warning;
+      list.appendChild(li);
+    });
+
+    list.hidden = !warnings || warnings.length === 0;
+  };
+
+  const renderRoutes = (routes) => {
+    const wrap = logisticsBox ? logisticsBox.querySelector('[data-logistics-routes-wrap]') : null;
+    const list = logisticsBox ? logisticsBox.querySelector('[data-logistics-routes]') : null;
+    if (!wrap || !list) return;
+
+    list.innerHTML = '';
+    (routes || []).forEach((route) => {
+      const li = document.createElement('li');
+      const commune = route.sellerCommuneName ? route.sellerCommuneName + ' — ' : '';
+      const sellers = route.sellerNamesSummary || (Array.isArray(route.sellerNames) ? route.sellerNames.join(', ') : '') || route.sellerName || 'Vendeur';
+      const summary = route.found ? (route.summary || 'trajet détecté') : 'trajet à confirmer';
+      li.textContent = commune + sellers + ' : ' + summary;
+      list.appendChild(li);
+    });
+
+    wrap.hidden = !routes || routes.length === 0;
+  };
+
+  const getGpsInputs = () => ({
+    gpsStatus: document.querySelector('[data-gps-status]'),
+    coordinatesInput: document.getElementById('delivery-gps-coordinates'),
+    latInput: form.querySelector('#checkout_gpsLatitude'),
+    lngInput: form.querySelector('#checkout_gpsLongitude'),
+    accuracyInput: form.querySelector('#checkout_gpsAccuracyMeters')
+  });
+
+  const syncGpsCoordinatesInputFromHidden = () => {
+    const { coordinatesInput, latInput, lngInput } = getGpsInputs();
+    if (!coordinatesInput || !latInput || !lngInput) return;
+
+    const lat = (latInput.value || '').trim();
+    const lng = (lngInput.value || '').trim();
+    coordinatesInput.value = lat && lng ? lat + ', ' + lng : '';
+  };
+
+  const parseGpsCoordinates = (value) => {
+    const matches = String(value || '').match(/[-+]?\d+(?:[.,]\d+)?/g) || [];
+    if (matches.length < 2) return null;
+
+    const lat = Number(matches[0].replace(',', '.'));
+    const lng = Number(matches[1].replace(',', '.'));
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+
+    return {
+      lat: lat.toFixed(7),
+      lng: lng.toFixed(7)
+    };
+  };
+
+  const updateGpsStatus = () => {
+    const { gpsStatus, latInput, lngInput, accuracyInput } = getGpsInputs();
+
+    if (!gpsStatus || !latInput || !lngInput) return;
+
+    const lat = (latInput.value || '').trim();
+    const lng = (lngInput.value || '').trim();
+    const accuracy = accuracyInput ? (accuracyInput.value || '').trim() : '';
+
+    gpsStatus.textContent = lat && lng
+      ? 'Position GPS enregistrée : ' + lat + ', ' + lng + (accuracy ? ' (~' + Math.round(parseFloat(accuracy)) + ' m)' : '')
+      : 'Position GPS non renseignée.';
+
+    updateDeliveryCurrentSummary();
+  };
+
+  const renderDeliverySchedule = (schedule) => {
+    const boxes = Array.from(document.querySelectorAll('[data-delivery-schedule]'));
+    if (boxes.length === 0) return;
+
+    boxes.forEach((box) => {
+      const write = (selector, value) => {
+        const el = box.querySelector(selector);
+        if (el) el.textContent = value || '';
+      };
+
+      if (!schedule || schedule.isActive === false) {
+        box.hidden = true;
+        write('[data-delivery-schedule-title]', '');
+        write('[data-delivery-schedule-next]', '');
+        write('[data-delivery-schedule-cutoff]', '');
+        write('[data-delivery-schedule-confirmation]', '');
+        return;
+      }
+
+      box.hidden = false;
+      write('[data-delivery-schedule-title]', schedule.message || 'Jours de passage selon ta commune.');
+
+      const hasNext = !!schedule.nextDeliveryDateLabel;
+      const nextRow = box.querySelector('[data-delivery-schedule-next-row]');
+      if (nextRow) nextRow.hidden = !hasNext;
+      write('[data-delivery-schedule-next]', schedule.nextDeliveryDateLabel || '');
+
+      const hasCutoff = !!schedule.cutoffLabel;
+      const cutoffRow = box.querySelector('[data-delivery-schedule-cutoff-row]');
+      if (cutoffRow) cutoffRow.hidden = !hasCutoff;
+      write('[data-delivery-schedule-cutoff]', schedule.cutoffLabel || '');
+      write('[data-delivery-schedule-confirmation]', schedule.confirmationLabel || 'La date finale est confirmée par Hodina après vérification des vendeurs.');
+    });
+  };
+
+  const previewNumber = (value) => {
+    const number = Number(value || 0);
+    return Number.isFinite(number) ? number : 0;
+  };
+
+  const previewRoutes = (preview) => {
+    const collectionRoutes = Array.isArray(preview.collectionRouteDetails) ? preview.collectionRouteDetails : [];
+    const sellerRoutes = Array.isArray(preview.sellerRouteDetails) ? preview.sellerRouteDetails : [];
+    return collectionRoutes.concat(sellerRoutes);
+  };
+
+  const maxRouteMetric = (preview, key) => previewRoutes(preview).reduce((max, route) => {
+    if (!route || typeof route !== 'object') return max;
+    return Math.max(max, previewNumber(route[key]));
+  }, 0);
+
+  const routeRequiresBarge = (preview) => previewRoutes(preview).some((route) => {
+    if (!route || typeof route !== 'object') return false;
+    return route.requiresBarge === true || previewNumber(route.bargeHopCount) > 0;
+  });
+
+  const buildDeliveryFeeReason = (preview) => {
+    const reasons = [];
+    const landHopCount = Math.max(previewNumber(preview.landHopCount), maxRouteMetric(preview, 'landHopCount'));
+    const bargeHopCount = Math.max(previewNumber(preview.bargeHopCount), maxRouteMetric(preview, 'bargeHopCount'));
+
+    if (landHopCount > 0) {
+      reasons.push(landHopCount + ' commune' + (landHopCount > 1 ? 's' : '') + ' traversée' + (landHopCount > 1 ? 's' : ''));
+    } else if (previewNumber(preview.collectionPointCount) > 1) {
+      reasons.push('plusieurs communes de collecte');
+    }
+
+    if (preview.requiresBarge || bargeHopCount > 0 || routeRequiresBarge(preview)) {
+      reasons.push('barge');
+    }
+
+    return reasons.length ? 'Inclus : ' + reasons.join(' + ') + '.' : '';
+  };
+
+  const buildDeliveryFeeSignature = (payload, feeReason) => {
+    if (!payload || payload.deliveryFee === null || payload.deliveryFee === undefined) return null;
+    return [
+      String(payload.deliveryFee),
+      String(payload.totalWithDelivery || ''),
+      feeReason || ''
+    ].join('|');
+  };
+
+  const renderLogisticsPreview = (payload, shouldNotifyFeeUpdate = false) => {
+    if (!logisticsBox || !payload || !payload.preview) return;
+
+    const preview = payload.preview;
+    logisticsBox.classList.toggle('is-barge', !!preview.requiresBarge);
+    setText('[data-logistics-message]', preview.message || 'Livraison estimée mise à jour.');
+
+    const hasCommune = !!preview.clientCommuneName;
+    setHidden('[data-logistics-commune-row]', !hasCommune);
+    setText('[data-logistics-commune]', preview.clientCommuneName || '');
+    setText('[data-logistics-territory]', preview.clientTerritory ? '(' + preview.clientTerritory + ')' : '');
+
+    const hasAddress = !preview.addressRequired;
+    setHidden('[data-logistics-barge-row]', !hasAddress);
+    setText('[data-logistics-barge]', preview.requiresBarge ? 'requise' : 'non détectée');
+
+    const sellerCount = preview.sellerCount || 0;
+    setHidden('[data-logistics-seller-row]', sellerCount <= 0);
+    setText('[data-logistics-seller-count]', String(sellerCount));
+
+    const collectionPointCount = preview.collectionPointCount || 0;
+    setHidden('[data-logistics-collection-row]', collectionPointCount <= 0);
+    setText('[data-logistics-collection-count]', String(collectionPointCount));
+
+    const hasLinks = !!preview.totalHopCount && preview.totalHopCount > 0;
+    setHidden('[data-logistics-links-row]', !hasLinks);
+    setText('[data-logistics-land]', String(preview.landHopCount || 0));
+    const hasBargeLinks = !!preview.bargeHopCount && preview.bargeHopCount > 0;
+    setHidden('[data-logistics-barge-links-wrap]', !hasBargeLinks);
+    setText('[data-logistics-barge-links]', String(preview.bargeHopCount || 0));
+
+    const hasFee = payload.deliveryFee !== null && payload.deliveryFee !== undefined;
+    setHidden('[data-logistics-fee-row]', !hasFee);
+    setHidden('[data-logistics-total-row]', !hasFee);
+    setText('[data-logistics-fee]', payload.deliveryFeeFormatted || '');
+    const feeReason = ((payload.deliveryFeeReason || '').trim()) || buildDeliveryFeeReason(preview);
+    setHidden('[data-logistics-fee-reason]', !hasFee || feeReason === '');
+    setText('[data-logistics-fee-reason]', feeReason);
+    setText('[data-logistics-total]', payload.totalWithDeliveryFormatted || '');
+
+    const currentDeliveryFeeSignature = buildDeliveryFeeSignature(payload, feeReason);
+    if (logisticsPreviewInitialized && shouldNotifyFeeUpdate && currentDeliveryFeeSignature !== null && currentDeliveryFeeSignature !== lastDeliveryFeeSignature) {
+      showDeliveryFeeUpdateFlash();
+    }
+    if (currentDeliveryFeeSignature !== null) {
+      lastDeliveryFeeSignature = currentDeliveryFeeSignature;
+    }
+    logisticsPreviewInitialized = true;
+
+    renderDeliverySchedule(payload.deliverySchedule || null);
+
+    const mobileTotalEl = document.querySelector('[data-cart-mobile-total]');
+    const mobileDeliveryEl = document.querySelector('[data-cart-mobile-delivery]');
+    const productsTotalEl = document.querySelector('[data-checkout-products-total]');
+    if (mobileTotalEl) {
+      mobileTotalEl.textContent = hasFee
+        ? (payload.totalWithDeliveryFormatted || '')
+        : (productsTotalEl ? productsTotalEl.textContent : '');
+    }
+    if (mobileDeliveryEl) mobileDeliveryEl.textContent = hasFee ? 'livraison incluse' : 'hors livraison';
+
+    renderRoutes(preview.collectionRouteDetails || preview.sellerRouteDetails || []);
+    renderWarnings(preview.warnings || []);
+  };
+
+  const refreshLogisticsPreview = (reason = 'auto') => {
+    if (!logisticsBox) return;
+
+    const communeInput = form.querySelector('#checkout_commune');
+    const postalInput = form.querySelector('#checkout_postalCode');
+    const addressInput = form.querySelector('#checkout_address');
+    const methodInput = form.querySelector('#checkout_deliveryMethod');
+    const pointInput = form.querySelector('#checkout_deliveryPointId');
+    const deliveryMethod = methodInput ? (methodInput.value || 'STANDARD') : 'STANDARD';
+    const url = logisticsBox.dataset.previewUrl;
+
+    if (!url) return;
+    if (deliveryMethod !== 'DELIVERY_POINT' && !communeInput) return;
+
+    if (logisticsAbortController) {
+      logisticsAbortController.abort();
+    }
+
+    logisticsAbortController = new AbortController();
+    setText('[data-logistics-message]', 'Recalcul de la livraison en cours…');
+
+    const body = new URLSearchParams();
+    body.set('deliveryMethod', deliveryMethod);
+    body.set('deliveryPointId', pointInput ? (pointInput.value || '') : '');
+    body.set('postalCode', postalInput ? (postalInput.value || '') : '');
+    body.set('commune', communeInput ? (communeInput.value || '') : '');
+    body.set('address', addressInput ? (addressInput.value || '') : '');
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+      },
+      body,
+      signal: logisticsAbortController.signal
+    })
+      .then((response) => response.json().then((payload) => ({ response, payload })))
+      .then(({ response, payload }) => {
+        if (!response.ok || payload.ok === false) {
+          setText('[data-logistics-message]', payload.message || 'Impossible de recalculer la livraison pour cette commune.');
+          setHidden('[data-logistics-fee-row]', true);
+          setHidden('[data-logistics-total-row]', true);
+          const mobileDeliveryEl = document.querySelector('[data-cart-mobile-delivery]');
+          const mobileTotalEl = document.querySelector('[data-cart-mobile-total]');
+          const productsTotalEl = document.querySelector('[data-checkout-products-total]');
+          if (mobileDeliveryEl) mobileDeliveryEl.textContent = 'livraison à confirmer';
+          if (mobileTotalEl && productsTotalEl) mobileTotalEl.textContent = productsTotalEl.textContent;
+          renderWarnings([]);
+          renderRoutes([]);
+          renderDeliverySchedule(null);
+          return;
+        }
+
+        renderLogisticsPreview(payload, reason === 'delivery-address' || reason === 'delivery-point' || reason === 'delivery-method');
+      })
+      .catch((error) => {
+        if (error && error.name === 'AbortError') return;
+        setText('[data-logistics-message]', 'Le recalcul de livraison a échoué. Réessaie ou valide : le serveur recalculera quand même à la commande.');
+        renderDeliverySchedule(null);
+        const mobileDeliveryEl = document.querySelector('[data-cart-mobile-delivery]');
+        if (mobileDeliveryEl) mobileDeliveryEl.textContent = 'livraison à confirmer';
+      });
+  };
+
+  const getDeliveryPointElements = () => ({
+    methodInput: form.querySelector('#checkout_deliveryMethod'),
+    pointInput: form.querySelector('#checkout_deliveryPointId'),
+    windowInput: form.querySelector('#checkout_deliveryPointTimeWindowId'),
+    requestedDateInput: form.querySelector('#checkout_deliveryPointRequestedDate'),
+    requestedTimeInput: form.querySelector('#checkout_deliveryPointRequestedTime'),
+    slotSelects: Array.from(form.querySelectorAll('[data-delivery-point-slot-select]')),
+    slotHelps: Array.from(form.querySelectorAll('[data-delivery-point-slot-help]')),
+    section: form.querySelector('[data-delivery-point-section]'),
+    modePanel: form.querySelector('[data-delivery-point-mode-panel]'),
+    cards: Array.from(form.querySelectorAll('[data-delivery-point-card]')),
+    methodButtons: Array.from(form.querySelectorAll('[data-delivery-method]')),
+    windowLists: Array.from(form.querySelectorAll('[data-delivery-point-window-list]'))
+  });
+
+
+  const formatSlotMinutes = (minutes) => {
+    const h = Math.floor(minutes / 60).toString().padStart(2, '0');
+    const m = (minutes % 60).toString().padStart(2, '0');
+    return h + ':' + m;
+  };
+
+  const timeToMinutes = (value) => {
+    const parts = String(value || '').split(':');
+    if (parts.length < 2) return null;
+    const h = Number.parseInt(parts[0], 10);
+    const m = Number.parseInt(parts[1], 10);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    return h * 60 + m;
+  };
+
+  const weekdayFromDateValue = (value) => {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const utcDay = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay();
+    return utcDay === 0 ? 7 : utcDay;
+  };
+
+  const buildDeliveryPointSlots = () => {
+    const { pointInput, requestedDateInput, windowLists } = getDeliveryPointElements();
+    const pointId = pointInput ? (pointInput.value || '').trim() : '';
+    const weekday = requestedDateInput ? weekdayFromDateValue(requestedDateInput.value || '') : null;
+
+    if (!pointId || weekday === null) {
+      return [];
+    }
+
+    const list = windowLists.find((candidate) => candidate.dataset.pointId === pointId);
+    if (!list) return [];
+
+    const slots = [];
+    Array.from(list.querySelectorAll('li')).forEach((item) => {
+      const windowWeekdayRaw = (item.dataset.windowWeekday || '').trim();
+      const windowWeekday = windowWeekdayRaw === '' ? null : Number.parseInt(windowWeekdayRaw, 10);
+      if (windowWeekday !== null && windowWeekday !== weekday) {
+        return;
+      }
+
+      const start = timeToMinutes(item.dataset.windowStart || '');
+      const end = timeToMinutes(item.dataset.windowEnd || '');
+      const windowId = item.dataset.windowId || '';
+      const windowLabel = item.dataset.windowLabel || item.textContent.trim() || 'Créneau';
+      if (start === null || end === null || end <= start) {
+        return;
+      }
+
+      for (let minute = start; minute + 30 <= end; minute += 30) {
+        const startLabel = formatSlotMinutes(minute);
+        const endLabel = formatSlotMinutes(minute + 30);
+        slots.push({
+          value: startLabel,
+          label: startLabel + ' – ' + endLabel,
+          windowId,
+          windowLabel,
+          sort: minute
+        });
+      }
+    });
+
+    slots.sort((left, right) => {
+      if (left.sort === right.sort) {
+        return left.windowLabel.localeCompare(right.windowLabel);
+      }
+      return left.sort - right.sort;
+    });
+
+    return slots;
+  };
+
+  const refreshDeliveryPointSlots = (clearSelection = false) => {
+    const { pointInput, requestedDateInput, requestedTimeInput, windowInput, slotSelects, slotHelps } = getDeliveryPointElements();
+    const pointId = pointInput ? (pointInput.value || '').trim() : '';
+    const dateValue = requestedDateInput ? (requestedDateInput.value || '').trim() : '';
+    const existingTime = !clearSelection && requestedTimeInput ? (requestedTimeInput.value || '').trim() : '';
+    const existingWindow = !clearSelection && windowInput ? (windowInput.value || '').trim() : '';
+    const slots = buildDeliveryPointSlots();
+
+    let placeholderText = 'Choisis d’abord un point de remise';
+    let helpText = 'Choisis un point, puis une date pour afficher les créneaux disponibles.';
+
+    if (pointId && !dateValue) {
+      placeholderText = 'Choisis d’abord une date';
+      helpText = 'Après avoir choisi une date, Hodina affichera les créneaux de 30 minutes disponibles.';
+    } else if (!pointId && dateValue) {
+      placeholderText = 'Choisis d’abord un point de remise';
+      helpText = 'Choisis le point de remise pour voir ses créneaux disponibles.';
+    } else if (pointId && dateValue && slots.length === 0) {
+      placeholderText = 'Aucun créneau disponible ce jour-là';
+      helpText = 'Choisis une autre date ou un autre point de remise.';
+    } else if (slots.length > 0) {
+      placeholderText = 'Choisis un créneau';
+      helpText = 'Créneaux de 30 minutes calculés à partir des horaires du point de remise.';
+    }
+
+    if (clearSelection) {
+      if (requestedTimeInput) requestedTimeInput.value = '';
+      if (windowInput) windowInput.value = '';
+    }
+
+    slotSelects.forEach((select) => {
+      select.innerHTML = '';
+
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = placeholderText;
+      select.appendChild(placeholder);
+
+      slots.forEach((slot) => {
+        const option = document.createElement('option');
+        option.value = slot.value;
+        option.dataset.windowId = slot.windowId;
+        option.textContent = slot.label;
+        if (existingTime === slot.value && (!existingWindow || existingWindow === slot.windowId)) {
+          option.selected = true;
+          if (requestedTimeInput) requestedTimeInput.value = slot.value;
+          if (windowInput) windowInput.value = slot.windowId;
+        }
+        select.appendChild(option);
+      });
+
+      select.disabled = slots.length === 0;
+      select.setAttribute('aria-disabled', slots.length === 0 ? 'true' : 'false');
+      if (slots.length > 0 && !select.value && requestedTimeInput && requestedTimeInput.value) {
+        requestedTimeInput.value = '';
+        if (windowInput) windowInput.value = '';
+      }
+    });
+
+    slotHelps.forEach((help) => {
+      help.textContent = helpText;
+    });
+  };
+
+  const applyDeliveryPointSlotSelect = (select) => {
+    const { requestedTimeInput, windowInput } = getDeliveryPointElements();
+    const option = select.options[select.selectedIndex];
+    if (requestedTimeInput) requestedTimeInput.value = select.value || '';
+    if (windowInput) windowInput.value = option ? (option.dataset.windowId || '') : '';
+    updateDeliveryPointCurrentSummary();
+    refresh();
+  };
+
+  const setDeliveryMethod = (method) => {
+    const { methodInput, section, modePanel, methodButtons } = getDeliveryPointElements();
+    const pointRequired = section && section.dataset.pointRequired === '1';
+    const normalized = pointRequired ? 'DELIVERY_POINT' : (method === 'DELIVERY_POINT' ? 'DELIVERY_POINT' : 'STANDARD');
+
+    if (methodInput) methodInput.value = normalized;
+    methodButtons.forEach((button) => {
+      button.classList.toggle('is-selected', button.dataset.deliveryMethod === normalized);
+      button.setAttribute('aria-pressed', button.dataset.deliveryMethod === normalized ? 'true' : 'false');
+    });
+
+    const usesDeliveryPoint = normalized === 'DELIVERY_POINT';
+    const standardDeliveryBlock = document.querySelector('[data-standard-delivery-block]');
+    const standardDeliverySummary = document.querySelector('[data-standard-delivery-summary]');
+    const standardDeliveryPicker = document.querySelector('[data-standard-delivery-picker]');
+    const deliveryPointSummary = document.querySelector('[data-delivery-point-current-card]');
+
+    if (standardDeliveryBlock) standardDeliveryBlock.hidden = usesDeliveryPoint;
+    if (standardDeliverySummary) standardDeliverySummary.hidden = usesDeliveryPoint;
+    if (standardDeliveryPicker) standardDeliveryPicker.hidden = usesDeliveryPoint;
+    if (deliveryPointSummary) deliveryPointSummary.hidden = !usesDeliveryPoint;
+    if (modePanel) modePanel.hidden = !usesDeliveryPoint;
+
+    updateDeliveryPointCurrentSummary();
+  };
+
+  const refreshDeliveryPointWindows = (clearSlotSelection = false) => {
+    const { pointInput, windowInput, windowLists, requestedTimeInput } = getDeliveryPointElements();
+    if (!pointInput) return;
+
+    const pointId = (pointInput.value || '').trim();
+    windowLists.forEach((list) => {
+      list.hidden = list.dataset.pointId !== pointId;
+    });
+
+    if (clearSlotSelection) {
+      if (windowInput) windowInput.value = '';
+      if (requestedTimeInput) requestedTimeInput.value = '';
+    }
+
+    refreshDeliveryPointSlots(clearSlotSelection);
+  };
+
+  const applyDeliveryPointCard = (card) => {
+    if (!card) return;
+
+    const { pointInput, cards } = getDeliveryPointElements();
+
+    setDeliveryMethod('DELIVERY_POINT');
+    if (pointInput) pointInput.value = card.dataset.pointId || '';
+
+    cards.forEach((candidate) => {
+      const selected = candidate === card;
+      candidate.classList.toggle('is-selected', selected);
+      candidate.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+
+    refreshDeliveryPointWindows(true);
+    updateDeliveryPointCurrentSummary();
+    refreshLogisticsPreview('delivery-point');
+    refresh();
+  };
+
+  const getSelectedCommuneOption = () => {
+    const communeInput = form.querySelector('#checkout_commune');
+
+    if (!communeInput || communeInput.selectedIndex < 0) {
+      return null;
+    }
+
+    const selectedOption = communeInput.options[communeInput.selectedIndex];
+
+    return selectedOption && selectedOption.value ? selectedOption : null;
+  };
+
+  const applyPostalCodeFilter = (options = {}) => {
+    const autoSelectSingle = options.autoSelectSingle !== false;
+    const communeInput = form.querySelector('#checkout_commune');
+    const postalInput = form.querySelector('#checkout_postalCode');
+
+    if (!communeInput || !postalInput) {
+      return;
+    }
+
+    const postalCode = (postalInput.value || '').trim();
+    const compatibleOptions = [];
+
+    Array.from(communeInput.options).forEach((option) => {
+      if (!option.value) {
+        option.disabled = false;
+        option.hidden = false;
+        return;
+      }
+
+      const compatible = !postalCode || (option.dataset.postalCode || '') === postalCode;
+      option.disabled = !compatible;
+      option.hidden = !compatible;
+
+      if (compatible) {
+        compatibleOptions.push(option);
+      }
+    });
+
+    const selectedOption = getSelectedCommuneOption();
+    if (selectedOption && selectedOption.disabled) {
+      communeInput.value = '';
+    }
+
+    if (postalCode && autoSelectSingle && !communeInput.value && compatibleOptions.length === 1) {
+      communeInput.value = compatibleOptions[0].value;
+    }
+  };
+
+  const applyCommuneMetadata = (options = {}) => {
+    const syncPostalCode = options.syncPostalCode !== false;
+    const communeInput = form.querySelector('#checkout_commune');
+    const postalInput = form.querySelector('#checkout_postalCode');
+    const localityInput = form.querySelector('#checkout_localityText');
+    const zoneInput = form.querySelector('#checkout_zone');
+    const zonePreview = document.getElementById('checkout-zone-preview');
+
+    const selectedOption = getSelectedCommuneOption();
+    const postalCode = selectedOption ? (selectedOption.dataset.postalCode || '') : '';
+    const zone = selectedOption ? (selectedOption.dataset.zone || '') : '';
+
+    if (postalInput && syncPostalCode && postalCode) {
+      postalInput.value = postalCode;
+      applyPostalCodeFilter({ autoSelectSingle: false });
+    }
+
+    if (zoneInput) zoneInput.value = zone;
+    if (zonePreview) zonePreview.textContent = formatZoneLabel(zone);
+    updateDeliveryCurrentSummary();
+  };
+
+  const refresh = () => {
+    const sameBilling = form.querySelector('#checkout_useBillingSameAsDelivery');
+    const billingFields = document.getElementById('checkout-billing-fields');
+    if (sameBilling && billingFields) {
+      billingFields.style.display = sameBilling.checked ? 'none' : 'block';
+    }
+
+    const validationState = getValidationState();
+    const visuallyDisabled = cartSyncing || !validationState.valid;
+    submitButtons.forEach((button) => {
+      button.disabled = cartSyncing;
+      button.setAttribute('aria-disabled', visuallyDisabled ? 'true' : 'false');
+      button.classList.toggle('is-disabled', visuallyDisabled);
+    });
+
+    const helper = document.querySelector('[data-checkout-submit-helper]');
+    if (helper) {
+      helper.textContent = visuallyDisabled
+        ? (cartSyncing ? 'Recalcul du panier en cours...' : 'Complète les informations obligatoires pour valider ta commande.')
+        : 'Toutes les informations obligatoires sont complètes. Tu peux valider ta commande.';
+    }
+
+    const clientAlert = document.querySelector('[data-checkout-client-alert]');
+    const clientAlertMessage = document.querySelector('[data-checkout-client-alert-message]');
+    if (clientAlert && clientAlertMessage) {
+      const showClientAlert = checkoutSubmitAttempted && !cartSyncing && !validationState.valid;
+      clientAlert.hidden = !showClientAlert;
+      if (showClientAlert) {
+        clientAlertMessage.textContent = validationState.reason;
+      }
+    }
+  };
+
+  window.addEventListener('hodina:cart-sync-started', () => {
+    cartSyncing = true;
+    refresh();
+  });
+
+  window.addEventListener('hodina:cart-synced', () => {
+    cartSyncing = false;
+    refreshLogisticsPreview();
+    refresh();
+  });
+
+  window.addEventListener('hodina:cart-sync-failed', () => {
+    cartSyncing = false;
+    refresh();
+  });
+
+
+  if (existingAccountModal) {
+    checkoutSubmitAttempted = true;
+    refresh();
+    window.setTimeout(() => {
+      existingAccountModal.querySelector('[data-existing-account-confirm]')?.focus();
+    }, 60);
+  }
+
+  if (existingAccountConfirmButton) {
+    existingAccountConfirmButton.addEventListener('click', () => {
+      const emailToConfirm = (existingAccountModal?.dataset.existingAccountEmail || emailInput?.value || '').trim().toLowerCase();
+      if (confirmExistingAccountInput) confirmExistingAccountInput.value = '1';
+      if (confirmedExistingAccountEmailInput) confirmedExistingAccountEmailInput.value = emailToConfirm;
+      hideExistingAccountModal();
+
+      if (form.requestSubmit) {
+        form.requestSubmit(submitButtons[0]);
+      } else {
+        form.submit();
+      }
+    });
+  }
+
+  existingAccountEditButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      resetExistingAccountConfirmation();
+      hideExistingAccountModal();
+      if (emailInput) {
+        emailInput.focus({ preventScroll: true });
+        emailInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  });
+
+  if (emailInput) {
+    emailInput.addEventListener('input', resetExistingAccountConfirmation);
+  }
+
+  submitButtons.forEach((button) => {
+    button.addEventListener('click', (event) => {
+      const validationState = getValidationState();
+      if (cartSyncing || !validationState.valid) {
+        event.preventDefault();
+        event.stopPropagation();
+        showClientValidationAlert();
+      }
+    });
+  });
+
+  form.addEventListener('submit', (event) => {
+    const submitter = event.submitter || null;
+    if (submitter && !submitter.matches('[data-checkout-submit]')) {
+      return;
+    }
+
+    const validationState = getValidationState();
+    if (cartSyncing || !validationState.valid) {
+      event.preventDefault();
+      showClientValidationAlert();
+    }
+  });
+
+
+  const normalizeLocalityQuery = (value) => (value || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  const getLocalityOptions = () => {
+    const datalist = document.getElementById('checkout-address-locality-suggestions');
+    if (!datalist) return [];
+
+    return Array.from(datalist.options).map((option) => {
+      const name = option.value || '';
+      const commune = option.dataset.commune || '';
+      const postalCode = option.dataset.postalCode || '';
+
+      return {
+        name,
+        commune,
+        postalCode,
+        localityId: option.dataset.localityId || '',
+        label: option.textContent || (commune ? `${name} — ${commune}` : name),
+        search: normalizeLocalityQuery(`${name} ${commune} ${postalCode}`),
+      };
+    }).filter((option) => option.name !== '');
+  };
+
+  const hideLocalitySuggestions = (input) => {
+    const container = input.closest('.client-form-field')?.querySelector('[data-address-locality-suggestions]') || null;
+    if (!container) return;
+
+    container.hidden = true;
+    container.innerHTML = '';
+  };
+
+  const applyLocalitySuggestion = (input, option) => {
+    input.value = option.name;
+    syncAddressLocalityFromText(input);
+    hideLocalitySuggestions(input);
+    updateDeliveryCurrentSummary();
+    refresh();
+    refreshLogisticsPreview('delivery-address');
+  };
+
+  const renderLocalitySuggestions = (input) => {
+    const container = input.closest('.client-form-field')?.querySelector('[data-address-locality-suggestions]') || null;
+    if (!container) return;
+
+    const query = normalizeLocalityQuery(input.value || '');
+    if (query.length < 2) {
+      hideLocalitySuggestions(input);
+      return;
+    }
+
+    const suggestions = getLocalityOptions()
+      .filter((option) => option.search.includes(query))
+      .slice(0, 7);
+
+    if (suggestions.length === 0) {
+      hideLocalitySuggestions(input);
+      return;
+    }
+
+    container.innerHTML = '';
+    suggestions.forEach((option) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'address-locality-suggestion-button';
+      button.innerHTML = `<strong>${option.name}</strong><span class="muted small">${option.commune ? option.commune + ' · ' : ''}${option.postalCode}</span>`;
+      button.addEventListener('mousedown', (event) => event.preventDefault());
+      button.addEventListener('click', () => applyLocalitySuggestion(input, option));
+      container.appendChild(button);
+    });
+
+    container.hidden = false;
+  };
+
+  const syncAddressLocalityFromText = (input = null) => {
+    const localityTextInput = input || form.querySelector('[data-address-locality-text]') || form.querySelector('#checkout_localityText');
+    const localityIdInput = form.querySelector('#checkout_addressLocalityId');
+
+    if (!localityTextInput || !localityIdInput) {
+      return;
+    }
+
+    const value = normalizeLocalityQuery(localityTextInput.value || '');
+    const matchingOption = getLocalityOptions().find((option) => normalizeLocalityQuery(option.name) === value) || null;
+
+    if (!matchingOption) {
+      localityIdInput.value = '';
+      return;
+    }
+
+    localityIdInput.value = matchingOption.localityId || '';
+
+    const postalCode = matchingOption.postalCode || '';
+    const commune = matchingOption.commune || '';
+    const postalInput = form.querySelector('#checkout_postalCode');
+    const communeInput = form.querySelector('#checkout_commune');
+
+    if (postalInput && postalCode) {
+      postalInput.value = postalCode;
+      applyPostalCodeFilter({ autoSelectSingle: false });
+    }
+
+    if (communeInput && commune) {
+      communeInput.value = commune;
+      applyCommuneMetadata({ syncPostalCode: true });
+    }
+  };
+
+  form.addEventListener('input', (event) => {
+    if (event.target && ['checkout_billingAddress', 'checkout_billingPostalCode', 'checkout_billingCommune', 'checkout_billingZone'].includes(event.target.id)) {
+      setBillingSameAsDelivery(false);
+    }
+
+    if (event.target && event.target.matches('[data-address-locality-text]')) {
+      renderLocalitySuggestions(event.target);
+      syncAddressLocalityFromText(event.target);
+    }
+
+    updateDeliveryCurrentSummary();
+    updateBillingCurrentSummary();
+    refresh();
+  });
+  form.addEventListener('change', (event) => {
+    if (event.target && ['checkout_billingAddress', 'checkout_billingPostalCode', 'checkout_billingCommune', 'checkout_billingZone'].includes(event.target.id)) {
+      setBillingSameAsDelivery(false);
+      updateBillingCurrentSummary();
+    }
+
+    if (event.target && event.target.matches('[data-address-locality-text]')) {
+      syncAddressLocalityFromText(event.target);
+      refreshLogisticsPreview('delivery-address');
+    }
+
+    if (event.target && event.target.id === 'checkout_postalCode') {
+      applyPostalCodeFilter({ autoSelectSingle: true });
+      applyCommuneMetadata({ syncPostalCode: false });
+      refreshLogisticsPreview('delivery-address');
+    }
+
+    if (event.target && event.target.id === 'checkout_commune') {
+      applyCommuneMetadata();
+      refreshLogisticsPreview('delivery-address');
+    }
+
+    refresh();
+  });
+
+  const openDetails = (picker) => {
+    if (!picker) return;
+    picker.classList.add('is-open');
+    picker.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('address-picker-open');
+
+    const panel = picker.querySelector('.address-picker-panel');
+    if (panel && panel.focus) {
+      window.setTimeout(() => panel.focus(), 30);
+    }
+  };
+
+  const closeAddressPicker = (picker) => {
+    if (!picker) return;
+    picker.classList.remove('is-open');
+    picker.setAttribute('aria-hidden', 'true');
+
+    if (!document.querySelector('.address-picker-sheet.is-open')) {
+      document.body.classList.remove('address-picker-open');
+    }
+  };
+
+  const updateBillingCurrentSummary = () => {
+    const billingAddressInput = form.querySelector('#checkout_billingAddress');
+    const billingPostalInput = form.querySelector('#checkout_billingPostalCode');
+    const billingCommuneInput = form.querySelector('#checkout_billingCommune');
+    const billingAddressEl = document.querySelector('[data-billing-current-address]');
+    const billingCommuneEl = document.querySelector('[data-billing-current-commune]');
+
+    const address = billingAddressInput ? (billingAddressInput.value || '').trim() : '';
+    const postalCode = billingPostalInput ? (billingPostalInput.value || '').trim() : '';
+    const commune = billingCommuneInput ? (billingCommuneInput.value || '').trim() : '';
+
+    if (billingAddressEl) billingAddressEl.textContent = address || 'Adresse de facturation à compléter';
+    if (billingCommuneEl) billingCommuneEl.textContent = (postalCode || commune)
+      ? ((postalCode ? postalCode + ' ' : '') + commune)
+      : '';
+  };
+
+  const setBillingSameAsDelivery = (value) => {
+    const sameBilling = form.querySelector('#checkout_useBillingSameAsDelivery');
+    if (sameBilling) sameBilling.checked = !!value;
+  };
+
+  const clearAddressSelection = (selector) => {
+    document.querySelectorAll(selector).forEach((card) => {
+      card.classList.remove('is-selected');
+      card.setAttribute('aria-pressed', 'false');
+    });
+  };
+
+  const markAddressSelected = (card, selector) => {
+    clearAddressSelection(selector);
+
+    if (!card || !card.classList) return;
+
+    card.classList.add('is-selected');
+    card.setAttribute('aria-pressed', 'true');
+  };
+
+  const applySavedAddress = (sourceEl) => {
+    const btnAddr = sourceEl.closest ? (sourceEl.closest('[data-address-card="delivery"]') || sourceEl) : sourceEl;
+    const addressInput = document.querySelector('#checkout_address');
+    const communeInput = document.querySelector('#checkout_commune');
+    const postalInput = document.querySelector('#checkout_postalCode');
+    const localityIdInput = document.querySelector('#checkout_addressLocalityId');
+    const localityTextInput = document.querySelector('#checkout_localityText');
+    const existingInput = document.querySelector('#checkout_existingAddressId');
+    const instructionsInput = document.querySelector('#checkout_deliveryInstructions');
+
+    const gpsLatInput = document.querySelector('#checkout_gpsLatitude');
+    const gpsLngInput = document.querySelector('#checkout_gpsLongitude');
+    const gpsAccuracyInput = document.querySelector('#checkout_gpsAccuracyMeters');
+
+    if(addressInput) addressInput.value = btnAddr.dataset.line1 || '';
+    if(postalInput) postalInput.value = btnAddr.dataset.postalCode || '';
+    if(communeInput) communeInput.value = btnAddr.dataset.commune || '';
+    if(localityIdInput) localityIdInput.value = btnAddr.dataset.localityId || '';
+    if(localityTextInput) localityTextInput.value = btnAddr.dataset.localityText || '';
+    if(existingInput) existingInput.value = btnAddr.dataset.addressId || '';
+    if(instructionsInput) instructionsInput.value = btnAddr.dataset.deliveryInstructions || '';
+    if(gpsLatInput) gpsLatInput.value = btnAddr.dataset.gpsLatitude || '';
+    if(gpsLngInput) gpsLngInput.value = btnAddr.dataset.gpsLongitude || '';
+    if(gpsAccuracyInput) gpsAccuracyInput.value = btnAddr.dataset.gpsAccuracy || '';
+    syncGpsCoordinatesInputFromHidden();
+
+    markAddressSelected(btnAddr, '[data-address-card="delivery"]');
+
+    applyPostalCodeFilter({ autoSelectSingle: false });
+    applyCommuneMetadata();
+    updateGpsStatus();
+    refreshLogisticsPreview('delivery-address');
+    refresh();
+  };
+
+  const applyBillingAddress = (sourceEl) => {
+    const card = sourceEl.closest ? (sourceEl.closest('[data-address-card="billing"]') || sourceEl) : sourceEl;
+    const existingInput = document.querySelector('#checkout_billingExistingAddressId');
+    const billingAddressInput = document.querySelector('#checkout_billingAddress');
+    const billingPostalInput = document.querySelector('#checkout_billingPostalCode');
+    const billingCommuneInput = document.querySelector('#checkout_billingCommune');
+    const billingZoneInput = document.querySelector('#checkout_billingZone');
+
+    if(existingInput) existingInput.value = card.dataset.billingAddressId || '';
+    if(billingAddressInput) billingAddressInput.value = card.dataset.billingLine1 || '';
+    if(billingPostalInput) billingPostalInput.value = card.dataset.billingPostalCode || '';
+    if(billingCommuneInput) billingCommuneInput.value = card.dataset.billingCommune || '';
+    if(billingZoneInput) billingZoneInput.value = card.dataset.billingZone || 'AUTRE';
+
+    markAddressSelected(card, '[data-address-card="billing"]');
+
+    setBillingSameAsDelivery(false);
+    updateBillingCurrentSummary();
+    refresh();
+  };
+
+  getDeliveryPointElements().methodButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      setDeliveryMethod(button.dataset.deliveryMethod || 'STANDARD');
+      if (button.dataset.deliveryMethod === 'DELIVERY_POINT') {
+        const { pointInput, cards } = getDeliveryPointElements();
+        const selected = cards.find((card) => card.dataset.pointId === (pointInput ? pointInput.value : '')) || cards[0];
+        applyDeliveryPointCard(selected);
+      } else {
+        updateDeliveryCurrentSummary();
+        refreshLogisticsPreview('delivery-method');
+        refresh();
+      }
+    });
+  });
+
+  getDeliveryPointElements().cards.forEach((card) => {
+    card.addEventListener('click', () => applyDeliveryPointCard(card));
+  });
+
+  document.querySelectorAll('[data-address-card="delivery"]').forEach(card => {
+    card.addEventListener('click', (event) => {
+      if (event.target && event.target.closest('button[type="submit"]')) return;
+      applySavedAddress(card);
+    });
+
+    card.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      applySavedAddress(card);
+    });
+  });
+
+  document.querySelectorAll('[data-edit-delivery-address]').forEach(editBtn => {
+    editBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      applySavedAddress(editBtn);
+      openDetails(document.getElementById('checkout-address-details'));
+      const addressInput = document.querySelector('#checkout_address');
+      if (addressInput) addressInput.focus();
+    });
+  });
+
+  document.querySelectorAll('[data-address-card="billing"]').forEach(card => {
+    card.addEventListener('click', (event) => {
+      if (event.target && event.target.closest('button[type="submit"]')) return;
+      applyBillingAddress(card);
+    });
+
+    card.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      applyBillingAddress(card);
+    });
+  });
+
+  document.querySelectorAll('[data-edit-billing-address]').forEach(editBtn => {
+    editBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      applyBillingAddress(editBtn);
+      openDetails(document.getElementById('checkout-billing-details'));
+      const billingAddressInput = document.querySelector('#checkout_billingAddress');
+      if (billingAddressInput) billingAddressInput.focus();
+    });
+  });
+
+  document.querySelectorAll('[data-open-address-picker]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const pickerId = button.getAttribute('data-open-address-picker');
+      openDetails(document.getElementById(pickerId));
+    });
+  });
+
+  document.querySelectorAll('[data-use-address-picker]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+
+      if (button.getAttribute('data-use-address-picker') === 'delivery') {
+        applyCommuneMetadata();
+        syncGpsCoordinatesInputFromHidden();
+        updateGpsStatus();
+        updateDeliveryCurrentSummary();
+        refreshLogisticsPreview('delivery-address');
+      }
+
+      if (button.getAttribute('data-use-address-picker') === 'billing') {
+        setBillingSameAsDelivery(false);
+        updateBillingCurrentSummary();
+      }
+
+      refresh();
+      closeAddressPicker(button.closest('.address-picker-sheet'));
+    });
+  });
+
+  document.querySelectorAll('[data-close-address-picker]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeAddressPicker(button.closest('.address-picker-sheet'));
+    });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    document.querySelectorAll('.address-picker-sheet.is-open').forEach(closeAddressPicker);
+  });
+
+  document.querySelectorAll('.address-picker-sheet.is-open').forEach((picker) => {
+    document.body.classList.add('address-picker-open');
+    picker.setAttribute('aria-hidden', 'false');
+  });
+
+  const editDeliveryBtn = document.getElementById('edit-delivery-address');
+  if(editDeliveryBtn){
+    editDeliveryBtn.addEventListener('click', () => {
+      openDetails(document.getElementById('checkout-address-details'));
+    });
+  }
+
+  const editBillingBtn = document.getElementById('edit-billing-address');
+  if(editBillingBtn){
+    editBillingBtn.addEventListener('click', () => {
+      openDetails(document.getElementById('checkout-billing-details'));
+      setBillingSameAsDelivery(false);
+      updateBillingCurrentSummary();
+      refresh();
+    });
+  }
+
+  const newAddressBtn = document.getElementById('use-new-address');
+  if(newAddressBtn){
+    newAddressBtn.addEventListener('click', () => {
+      const addressInput = document.querySelector('#checkout_address');
+      const existingInput = document.querySelector('#checkout_existingAddressId');
+      const communeInput = document.querySelector('#checkout_commune');
+      const postalInput = document.querySelector('#checkout_postalCode');
+      const instructionsInput = document.querySelector('#checkout_deliveryInstructions');
+
+      if(existingInput) existingInput.value = '';
+      if(addressInput) {
+        addressInput.value = '';
+        addressInput.focus();
+      }
+      if(postalInput) {
+          postalInput.value = '';
+      }
+      if(communeInput) {
+          communeInput.value = '';
+      }
+      if(instructionsInput) instructionsInput.value = '';
+
+      const gpsLatInput = document.querySelector('#checkout_gpsLatitude');
+      const gpsLngInput = document.querySelector('#checkout_gpsLongitude');
+      const gpsAccuracyInput = document.querySelector('#checkout_gpsAccuracyMeters');
+      if(gpsLatInput) gpsLatInput.value = '';
+      if(gpsLngInput) gpsLngInput.value = '';
+      if(gpsAccuracyInput) gpsAccuracyInput.value = '';
+      syncGpsCoordinatesInputFromHidden();
+
+      applyPostalCodeFilter({ autoSelectSingle: false });
+      applyCommuneMetadata();
+      updateGpsStatus();
+      refreshLogisticsPreview('delivery-address');
+      clearAddressSelection('[data-address-card="delivery"]');
+      refresh();
+    });
+  }
+
+  const newBillingAddressBtn = document.getElementById('use-new-billing-address');
+  if(newBillingAddressBtn){
+    newBillingAddressBtn.addEventListener('click', () => {
+      const existingInput = document.querySelector('#checkout_billingExistingAddressId');
+      const billingAddressInput = document.querySelector('#checkout_billingAddress');
+      const billingPostalInput = document.querySelector('#checkout_billingPostalCode');
+      const billingCommuneInput = document.querySelector('#checkout_billingCommune');
+      const billingZoneInput = document.querySelector('#checkout_billingZone');
+
+      if(existingInput) existingInput.value = '';
+      if(billingAddressInput) {
+        billingAddressInput.value = '';
+        billingAddressInput.focus();
+      }
+      if(billingPostalInput) billingPostalInput.value = '';
+      if(billingCommuneInput) billingCommuneInput.value = '';
+      if(billingZoneInput) billingZoneInput.value = 'AUTRE';
+      setBillingSameAsDelivery(false);
+      updateBillingCurrentSummary();
+      clearAddressSelection('[data-address-card="billing"]');
+      refresh();
+    });
+  }
+
+  const existingInput = document.querySelector('#checkout_existingAddressId');
+  if(existingInput && existingInput.value){
+    const selected = document.querySelector(`[data-address-card="delivery"][data-address-id="${existingInput.value}"]`);
+    if(selected) markAddressSelected(selected, '[data-address-card="delivery"]');
+  }
+
+  const billingExistingInput = document.querySelector('#checkout_billingExistingAddressId');
+  if(billingExistingInput && billingExistingInput.value){
+    const selectedBilling = document.querySelector(`[data-address-card="billing"][data-billing-address-id="${billingExistingInput.value}"]`);
+    if(selectedBilling) markAddressSelected(selectedBilling, '[data-address-card="billing"]');
+  }
+
+  updateBillingCurrentSummary();
+  const gpsCoordinatesInput = document.getElementById('delivery-gps-coordinates');
+  if (gpsCoordinatesInput) {
+    gpsCoordinatesInput.addEventListener('input', () => {
+      const { gpsStatus, latInput, lngInput, accuracyInput } = getGpsInputs();
+      const rawValue = gpsCoordinatesInput.value.trim();
+
+      if (!latInput || !lngInput) return;
+
+      if (!rawValue) {
+        latInput.value = '';
+        lngInput.value = '';
+        if (accuracyInput) accuracyInput.value = '';
+        updateGpsStatus();
+        refresh();
+        return;
+      }
+
+      const coordinates = parseGpsCoordinates(rawValue);
+      if (!coordinates) {
+        if (gpsStatus) gpsStatus.textContent = 'Format GPS invalide. Exemple : -12.7806000, 45.2278000';
+        return;
+      }
+
+      latInput.value = coordinates.lat;
+      lngInput.value = coordinates.lng;
+      if (accuracyInput) accuracyInput.value = '';
+      updateGpsStatus();
+      refresh();
+    });
+  }
+
+  const useLocationBtn = document.getElementById('use-current-location');
+  if (useLocationBtn) {
+    useLocationBtn.addEventListener('click', () => {
+      const { gpsStatus, latInput, lngInput, accuracyInput } = getGpsInputs();
+
+      if (!navigator.geolocation || !latInput || !lngInput) {
+        if (gpsStatus) gpsStatus.textContent = 'La géolocalisation n’est pas disponible sur ce navigateur.';
+        return;
+      }
+
+      if (gpsStatus) gpsStatus.textContent = 'Recherche de ta position GPS...';
+
+      navigator.geolocation.getCurrentPosition((position) => {
+        latInput.value = Number(position.coords.latitude).toFixed(7);
+        lngInput.value = Number(position.coords.longitude).toFixed(7);
+        if (accuracyInput && position.coords.accuracy !== null && position.coords.accuracy !== undefined) {
+          accuracyInput.value = Number(position.coords.accuracy).toFixed(2);
+        }
+        syncGpsCoordinatesInputFromHidden();
+        updateGpsStatus();
+        refresh();
+      }, () => {
+        if (gpsStatus) gpsStatus.textContent = 'Impossible de récupérer la position. Vérifie l’autorisation GPS du navigateur.';
+      }, {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 60000
+      });
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    const gpsButton = event.target.closest('[data-open-gps-field]');
+    if (!gpsButton) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const details = document.getElementById('checkout-address-details');
+    openDetails(details);
+
+    const gpsInput = document.getElementById('delivery-gps-coordinates');
+    const target = gpsInput || details;
+
+    if (target && target.scrollIntoView) {
+      target.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+
+    if (gpsInput && gpsInput.focus) {
+      window.setTimeout(() => gpsInput.focus(), 250);
+    }
+  });
+
+  form.querySelectorAll('[data-delivery-point-slot-select]').forEach((select) => {
+    select.addEventListener('change', () => applyDeliveryPointSlotSelect(select));
+  });
+
+  ['#checkout_deliveryPointRequestedDate', '#checkout_deliveryPointCustomerInstructions'].forEach((selector) => {
+    const input = form.querySelector(selector);
+    if (!input) return;
+    input.addEventListener('input', () => {
+      if (selector === '#checkout_deliveryPointRequestedDate') refreshDeliveryPointSlots(true);
+      updateDeliveryPointCurrentSummary();
+      refresh();
+    });
+    input.addEventListener('change', () => {
+      if (selector === '#checkout_deliveryPointRequestedDate') refreshDeliveryPointSlots(true);
+      updateDeliveryPointCurrentSummary();
+      refresh();
+    });
+  });
+
+  const initialDeliveryPoint = getDeliveryPointElements();
+  if (initialDeliveryPoint.section) {
+    setDeliveryMethod(initialDeliveryPoint.section.dataset.pointRequired === '1' ? 'DELIVERY_POINT' : (initialDeliveryPoint.methodInput ? initialDeliveryPoint.methodInput.value : 'STANDARD'));
+    const selectedPointCard = initialDeliveryPoint.cards.find((card) => initialDeliveryPoint.pointInput && card.dataset.pointId === initialDeliveryPoint.pointInput.value);
+    if ((initialDeliveryPoint.section.dataset.pointRequired === '1' || (initialDeliveryPoint.methodInput && initialDeliveryPoint.methodInput.value === 'DELIVERY_POINT')) && (selectedPointCard || initialDeliveryPoint.cards[0])) {
+      applyDeliveryPointCard(selectedPointCard || initialDeliveryPoint.cards[0]);
+    } else {
+      refreshDeliveryPointWindows();
+    }
+  }
+
+  const serverAlert = document.querySelector('[data-checkout-server-alert]');
+  if (serverAlert && serverAlert.scrollIntoView) {
+    window.setTimeout(() => {
+      serverAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }
+
+  applyPostalCodeFilter({ autoSelectSingle: true });
+  applyCommuneMetadata();
+  syncGpsCoordinatesInputFromHidden();
+  updateGpsStatus();
+  refreshLogisticsPreview();
+  refresh();
+})();
+</script>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+

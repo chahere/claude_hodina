@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Récap paiements livreurs Hodina</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.5; color: #1f2933;">
+    <h1 style="font-size: 22px; margin-bottom: 8px;">Paiements livreurs à contrôler</h1>
+
+    <p>{{ emailBranding.opening|default('Bonjour,') }}</p>
+
+    <p>
+        Période : <strong>{{ period.label }}</strong><br>
+        Paiement prévu : <strong>{{ period.due|date('d/m/Y') }}</strong><br>
+        Généré le : {{ executedAt|date('d/m/Y H:i') }}<br>
+        Mode : {{ autoDue ? 'cron auto-due' : 'manuel' }}
+    </p>
+
+    <table cellpadding="6" cellspacing="0" border="0" style="border-collapse: collapse; margin: 16px 0;">
+        <tr><td>Paiements créés</td><td><strong>{{ result.created }}</strong></td></tr>
+        <tr><td>Paiements complétés</td><td><strong>{{ result.updated }}</strong></td></tr>
+        <tr><td>Lignes rattachées</td><td><strong>{{ result.lines }}</strong></td></tr>
+        <tr><td>Commandes ignorées</td><td><strong>{{ result.skippedOrders }}</strong></td></tr>
+        <tr><td>Total à contrôler</td><td><strong>{{ summary.totalAmount|number_format(2, ',', ' ') }} €</strong></td></tr>
+    </table>
+
+    {% if result.payouts is empty %}
+        <p><strong>Aucun nouveau paiement livreur à générer pour cette période.</strong></p>
+    {% else %}
+        <h2 style="font-size: 18px; margin-top: 20px;">Détail par livreur</h2>
+        <table cellpadding="8" cellspacing="0" border="1" style="border-collapse: collapse; border-color: #d8dee9;">
+            <thead>
+                <tr>
+                    <th align="left">Livreur</th>
+                    <th align="right">Commandes</th>
+                    <th align="right">Montant</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payout in result.payouts %}
+                    <tr>
+                        <td>{{ payout.courierLabel }}</td>
+                        <td align="right">{{ payout.ordersCount }}</td>
+                        <td align="right">{{ payout.totalAmount|number_format(2, ',', ' ') }} €</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+    <p style="margin-top: 20px;">
+        Action requise : connecte-toi à <strong>EasyAdmin &gt; Livreurs &gt; Rémunérations livreurs</strong>
+        pour contrôler, valider puis marquer payé après le paiement réel.
+    </p>
+
+    <p>
+        {{ emailBranding.closing|default('Merci,') }}<br>
+        {{ emailBranding.signature|default('L’équipe Hodina') }}
+    </p>
+
+    <p style="font-size: 13px; color: #64748b;">
+        Rappel anti-régression : le cron ne valide pas et ne paie jamais automatiquement.
+        Il prépare uniquement des brouillons de rémunération livreur et envoie ce récapitulatif.
+    </p>
+</body>
+</html>

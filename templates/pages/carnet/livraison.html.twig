@@ -1,0 +1,183 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Livraison Hodina à Mayotte — Zones et jours indicatifs{% endblock %}
+
+{% block body %}
+<section class="hero carnet-hero">
+    <div class="container">
+        <p class="discover-kicker">Le Carnet Hodina</p>
+        <h1>Livraison Hodina à Mayotte</h1>
+        <p class="hero-sub">
+            Les zones, les jours indicatifs et les bons réflexes pour recevoir tes produits locaux sans compliquer la commande.
+        </p>
+
+        <div class="hero-actions discover-hero-actions">
+            <a href="{{ path('product_catalogue') }}" class="btn btn-primary">Voir le catalogue</a>
+            <a href="#jours" class="btn btn-secondary">Voir les jours</a>
+        </div>
+    </div>
+</section>
+
+<section class="section carnet-section">
+    <div class="container">
+        <div class="carnet-note">
+            <strong>Informations indicatives :</strong>
+            les informations de cette page sont indicatives. La date, le créneau et les frais sont confirmés au panier
+            selon l’adresse, les produits, les vendeurs et l’organisation du moment.
+        </div>
+
+        <div class="carnet-guide-layout">
+            <aside class="carnet-guide-nav" aria-label="Sommaire livraison Hodina">
+                <a href="#fonctionnement">Fonctionnement</a>
+                <a href="#zones_jours">Zones et jours</a>
+                <a href="#modes">Recevoir</a>
+                <a href="#delais">Délais</a>
+                <a href="#terrain">Terrain</a>
+                <a href="#panier">Panier</a>
+            </aside>
+
+            <div class="carnet-guide-content">
+                <section class="carnet-guide-block" id="fonctionnement">
+                    <p class="discover-kicker">1. Comment fonctionne la livraison Hodina</p>
+                    <h2>Tu commandes, Hodina confirme, puis la livraison s’organise</h2>
+                    <p class="muted">
+                        Pendant le pilote, Hodina vérifie les produits auprès des vendeurs avant de confirmer la commande.
+                        L’objectif : rester simple côté client, tout en respectant les contraintes réelles du terrain.
+                    </p>
+                    <div class="discover-card-grid">
+                        <article class="discover-card">
+                            <h3>1. Tu choisis</h3>
+                            <p>Ajoute tes produits au panier et indique ta commune ou ton point de remise.</p>
+                        </article>
+                        <article class="discover-card">
+                            <h3>2. Hodina vérifie</h3>
+                            <p>L’équipe confirme les disponibilités et prépare l’organisation avec les vendeurs.</p>
+                        </article>
+                        <article class="discover-card">
+                            <h3>3. Tu reçois</h3>
+                            <p>La commande est remise selon l’adresse, le repère ou le point choisi.</p>
+                        </article>
+                    </div>
+                </section>
+
+
+
+                <section class="carnet-guide-block" id="zones_jours">
+                    <p class="discover-kicker">2. Zones et jours de livraison indicatifs</p>
+                    <h2>Les repères par secteur</h2>
+                    <p class="muted">
+                        Ces visuels donnent les jours généralement prévus par zone. Ils ne remplacent pas la confirmation affichée au panier.
+                    </p>
+
+                    <div class="carnet-delivery-visual-grid" aria-label="Cartes indicatives des jours de livraison Hodina">
+                        <figure class="carnet-delivery-visual-card">
+                            <img
+                                src="{{ asset('images/carnet/livraison/livraison-petite-terre.webp') }}"
+                                alt="Carte de livraison Hodina Petite-Terre, lundi et jeudi indicatifs"
+                                width="520"
+                                height="923"
+                                loading="lazy"
+                            >
+                            <figcaption>
+                                <strong>Petite-Terre</strong>
+                                <span>Lundi & jeudi</span>
+                            </figcaption>
+                        </figure>
+
+                        <figure class="carnet-delivery-visual-card">
+                            <img
+                                src="{{ asset('images/carnet/livraison/livraison-mamoudzou.webp') }}"
+                                alt="Carte de livraison Hodina Mamoudzou, mercredi et samedi indicatifs"
+                                width="520"
+                                height="923"
+                                loading="lazy"
+                            >
+                            <figcaption>
+                                <strong>Mamoudzou</strong>
+                                <span>Mercredi & samedi</span>
+                            </figcaption>
+                        </figure>
+
+                        <figure class="carnet-delivery-visual-card">
+                            <img
+                                src="{{ asset('images/carnet/livraison/livraison-nord-centre.webp') }}"
+                                alt="Carte de livraison Hodina Nord et Centre, mardi et vendredi indicatifs"
+                                width="520"
+                                height="923"
+                                loading="lazy"
+                            >
+                            <figcaption>
+                                <strong>Nord et Centre</strong>
+                                <span>Mardi & vendredi</span>
+                            </figcaption>
+                        </figure>
+
+                        <figure class="carnet-delivery-visual-card">
+                            <img
+                                src="{{ asset('images/carnet/livraison/livraison-sud.webp') }}"
+                                alt="Carte de livraison Hodina Sud, mercredi et samedi indicatifs"
+                                width="520"
+                                height="923"
+                                loading="lazy"
+                            >
+                            <figcaption>
+                                <strong>Sud</strong>
+                                <span>Mercredi & samedi</span>
+                            </figcaption>
+                        </figure>
+                    </div>
+                </section>
+
+                <section class="carnet-guide-block" id="modes">
+                    <p class="discover-kicker">3. Livraison à domicile et points de remise</p>
+                    <h2>Deux façons de recevoir une commande</h2>
+                    <div class="discover-card-grid">
+                        <article class="discover-card">
+                            <h3>À domicile</h3>
+                            <p>Indique une adresse, un téléphone et, si possible, une position GPS.</p>
+                        </article>
+                        <article class="discover-card">
+                            <h3>Point de remise</h3>
+                            <p>Certains produits peuvent être récupérés sur rendez-vous, avec un créneau précis.</p>
+                        </article>
+                        <article class="discover-card">
+                            <h3>Bon repère</h3>
+                            <p>Une consigne claire aide beaucoup quand l’adresse est difficile à trouver.</p>
+                        </article>
+                    </div>
+                </section>
+
+                <section class="carnet-guide-block" id="delais">
+                    <p class="discover-kicker">4. Pourquoi les délais peuvent varier</p>
+                    <h2>Les produits locaux suivent le terrain</h2>
+                    <p class="muted">
+                        Disponibilité des vendeurs, météo, trajets, points de collecte et volume de commandes peuvent faire évoluer l’organisation.
+                        Hodina préfère confirmer clairement plutôt que promettre trop vite.
+                    </p>
+                </section>
+
+                <section class="carnet-guide-block" id="terrain">
+                    <p class="discover-kicker">5. Photos et vidéos du terrain</p>
+                    <h2>Montrer le réel progressivement</h2>
+                    <p class="muted">
+                        Les cartes ci-dessus sont les premiers visuels du Carnet. D’autres contenus viendront montrer la préparation des produits,
+                        les points de remise, les repères utiles et les coulisses des tournées.
+                    </p>
+                </section>
+
+                <section class="carnet-guide-block" id="panier">
+                    <p class="discover-kicker">6. Vérifier ma livraison dans le panier</p>
+                    <h2>Le panier reste la source de vérité</h2>
+                    <p class="muted">
+                        Ajoute un produit, renseigne ta commune ou ton point de remise, puis Hodina affiche les informations réellement disponibles.
+                    </p>
+                    <div class="demo-actions">
+                        <a href="{{ path('product_catalogue') }}" class="btn btn-primary">Voir le catalogue</a>
+                        <a href="{{ path('cart_index') }}" class="btn btn-secondary">Aller au panier</a>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

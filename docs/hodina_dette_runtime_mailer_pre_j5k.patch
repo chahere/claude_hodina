@@ -1,0 +1,832 @@
+diff -ruN /mnt/data/hodina_orig_min/docs/ARCHITECTURE.md /mnt/data/hodina_dette_update/docs/ARCHITECTURE.md
+--- /mnt/data/hodina_orig_min/docs/ARCHITECTURE.md	2026-06-19 06:28:12.227833174 +0000
++++ /mnt/data/hodina_dette_update/docs/ARCHITECTURE.md	2026-06-19 06:32:08.896885724 +0000
+@@ -3554,3 +3554,34 @@
+ ### J5M Livreur
+ 
+ Réutiliser le portail livreur existant au lieu de le recréer.
++
++
++## Architecture runtime pré-J5K — env, uploads, assets, mailer
++
++Avant J5K, le projet distingue explicitement quatre familles de fichiers :
++
++```text
++1. Secrets environnement : .env.local / .env.prod.local / prod.env.local
++2. Données métier runtime : public/uploads/products
++3. Sorties générées : public/assets
++4. Logs serveur : public/error_log
++```
++
++Règle Git :
++
++```text
++.env.local, .env.prod.local, prod.env.local : jamais suivis
++public/uploads/products : seul .gitkeep suivi
++public/assets : jamais suivi, régénéré par AssetMapper
++public/error_log : jamais suivi
++```
++
++Le mailer reste branché sur l'environnement Symfony :
++
++```yaml
++framework:
++    mailer:
++        dsn: '%env(MAILER_DSN)%'
++```
++
++`MAILER_DSN=null://null` est une valeur de sécurité, pas une preuve d'envoi. La preuve d'envoi réelle combine configuration SMTP serveur et réception effective.
+diff -ruN /mnt/data/hodina_orig_min/docs/COMMIT_DETTE_TECHNIQUE_ENV_UPLOADS_ASSETS_MAILER.md /mnt/data/hodina_dette_update/docs/COMMIT_DETTE_TECHNIQUE_ENV_UPLOADS_ASSETS_MAILER.md
+--- /mnt/data/hodina_orig_min/docs/COMMIT_DETTE_TECHNIQUE_ENV_UPLOADS_ASSETS_MAILER.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/hodina_dette_update/docs/COMMIT_DETTE_TECHNIQUE_ENV_UPLOADS_ASSETS_MAILER.md	2026-06-19 06:32:08.893548312 +0000
+@@ -0,0 +1,105 @@
++# COMMIT — Dette technique env / uploads / assets / MAILER_DSN
++
++Date : **19/06/2026**  
++Position : **après J5G-B4 v11, avant J5K GPS livraison**
++
++## Objectif
++
++Nettoyer une dette d'exploitation courte avant d'ajouter la position GPS de livraison.
++
++Cette étape ne change pas le métier Hodina. Elle sécurise le dépôt et la MEP :
++
++- secrets hors Git ;
++- uploads produits hors Git ;
++- assets générés hors Git ;
++- mailer documenté et testable ;
++- validation e-mail basée sur une réception réelle.
++
++## Fichiers / zones concernées
++
++```text
++.gitignore
++public/uploads/products/.gitkeep
++docs/README_MAJ_DETTE_TECHNIQUE_ENV_UPLOADS_ASSETS_MAILER.md
++docs/TODO.md
++docs/DECISIONS.md
++docs/DEPLOIEMENT_PREPROD.md
++docs/ARCHITECTURE.md
++docs/WORKFLOWS.md
++docs/PILOT_STATUS_DETAILED.md
++docs/ROADMAP.md
++tools/dette-runtime-mailer-pre-j5k.ps1
++```
++
++## Règle retenue
++
++```text
++.env.local / .env.prod.local / prod.env.local = secrets environnement, jamais Git
++public/uploads/products = données métier runtime, jamais Git sauf .gitkeep
++public/assets = sortie AssetMapper, jamais Git
++public/error_log = log runtime o2switch, jamais Git
++```
++
++## Commandes appliquées / à appliquer
++
++```bash
++git rm --cached --ignore-unmatch .env.local .env.prod.local prod.env.local
++git rm --cached -r --ignore-unmatch public/assets
++git rm --cached -r --ignore-unmatch public/uploads/products
++git add .gitignore public/uploads/products/.gitkeep docs tools
++```
++
++## Validation attendue
++
++```bash
++git ls-files .env.local .env.prod.local prod.env.local public/assets public/uploads/products
++```
++
++Sortie attendue :
++
++```text
++public/uploads/products/.gitkeep
++```
++
++## Validation mailer
++
++La configuration code reste :
++
++```yaml
++framework:
++    mailer:
++        dsn: '%env(MAILER_DSN)%'
++```
++
++La configuration runtime doit être côté serveur :
++
++```env
++MAILER_DSN=smtps://...
++MAILER_FROM=commandes@hodina.fr
++MAILER_FROM_NAME="Hodina"
++```
++
++La valeur suivante reste acceptable dans `.env` comme valeur de sécurité par défaut, mais ne valide aucun envoi réel :
++
++```env
++MAILER_DSN=null://null
++```
++
++## Décision de validation
++
++Un e-mail de commande est considéré validé uniquement si les trois conditions sont vraies :
++
++```text
++EmailLog = SENT
+++ MAILER_DSN réel côté serveur
+++ réception effective dans une boîte mail réelle
++```
++
++## Impact J5K
++
++Après cette dette, J5K peut démarrer sans risque de confusion entre :
++
++- données runtime à conserver ;
++- assets à régénérer ;
++- secrets environnementaux ;
++- futurs champs GPS sur `Address` et `CustomerOrder`.
+diff -ruN /mnt/data/hodina_orig_min/docs/DECISIONS.md /mnt/data/hodina_dette_update/docs/DECISIONS.md
+--- /mnt/data/hodina_orig_min/docs/DECISIONS.md	2026-06-19 06:28:12.234186074 +0000
++++ /mnt/data/hodina_dette_update/docs/DECISIONS.md	2026-06-19 06:32:08.895640921 +0000
+@@ -4107,3 +4107,54 @@
+ 5. J5M portail livreur exploitable.
+ 6. Paiement et automatisations plus tard.
+ ```
++
++
++# Décisions du 19/06/2026 — Dette technique pré-J5K env/uploads/assets/MAILER_DSN
++
++## Décision 1 — Secrets environnement hors Git
++
++`.env.local`, `.env.prod.local` et `prod.env.local` ne doivent pas être suivis par Git.
++
++Ils peuvent exister physiquement sur recette / production, mais doivent rester locaux au serveur.
++
++## Décision 2 — `prod.env.local` reste legacy
++
++`prod.env.local` peut être protégé par les scripts pour éviter toute perte historique, mais Symfony charge naturellement `.env.local` et `.env.prod.local`.
++
++Décision : les secrets réellement utilisés par l'application doivent être placés dans `.env.local` ou `.env.prod.local`, pas uniquement dans `prod.env.local`.
++
++## Décision 3 — Uploads produits runtime
++
++`public/uploads/products` contient des données métier runtime. Le dossier doit être conservé, mais les images réelles ne doivent pas être versionnées.
++
++Seul le fichier suivant peut être suivi par Git :
++
++```text
++public/uploads/products/.gitkeep
++```
++
++## Décision 4 — Assets générés
++
++`public/assets` est une sortie de compilation Symfony AssetMapper. Il doit être ignoré par Git et régénéré pendant la MEP avec :
++
++```bash
++php bin/console asset-map:compile --env=prod
++```
++
++## Décision 5 — Logs runtime o2switch
++
++`public/error_log` est un fichier runtime serveur. Il ne doit pas être suivi par Git.
++
++## Décision 6 — Validation mail réelle
++
++Un e-mail Hodina n'est pas validé uniquement parce que `EmailLog` vaut `SENT`.
++
++Validation complète :
++
++```text
++EmailLog = SENT
+++ MAILER_DSN réel côté serveur
+++ e-mail reçu dans une boîte réelle
++```
++
++`MAILER_DSN=null://null` reste acceptable comme valeur de sécurité dans `.env`, mais ne valide aucun envoi réel.
+diff -ruN /mnt/data/hodina_orig_min/docs/DEPLOIEMENT_PREPROD.md /mnt/data/hodina_dette_update/docs/DEPLOIEMENT_PREPROD.md
+--- /mnt/data/hodina_orig_min/docs/DEPLOIEMENT_PREPROD.md	2026-06-19 06:28:12.234688393 +0000
++++ /mnt/data/hodina_dette_update/docs/DEPLOIEMENT_PREPROD.md	2026-06-19 06:32:08.896236047 +0000
+@@ -2544,3 +2544,62 @@
+ ```
+ 
+ Éviter de tester l'admin pendant que la MEP tourne. Attendre `[OK] Déploiement terminé avec succès`, puis ouvrir une nouvelle fenêtre privée.
++
++
++## Procédure pré-J5K — Nettoyage Git env/uploads/assets/MAILER_DSN
++
++Cette procédure doit être faite une fois dans le dépôt, avant le démarrage J5K.
++
++### Nettoyage local sans suppression physique
++
++```bash
++git rm --cached --ignore-unmatch .env.local .env.prod.local prod.env.local
++git rm --cached -r --ignore-unmatch public/assets
++git rm --cached -r --ignore-unmatch public/uploads/products
++mkdir -p public/uploads/products
++touch public/uploads/products/.gitkeep
++git add .gitignore public/uploads/products/.gitkeep
++```
++
++Sur Windows PowerShell, utiliser le script :
++
++```powershell
++.\tools\dette-runtime-mailer-pre-j5k.ps1
++```
++
++### Vérification avant commit
++
++```bash
++git ls-files .env.local .env.prod.local prod.env.local public/assets public/uploads/products
++```
++
++Résultat attendu :
++
++```text
++public/uploads/products/.gitkeep
++```
++
++### Vérification après déploiement recette/prod
++
++```bash
++ls -la .env.local .env.prod.local prod.env.local 2>/dev/null || true
++ls -la public/uploads/products 2>/dev/null || true
++ls -la public/assets 2>/dev/null || true
++```
++
++Les fichiers `.env.local` / `.env.prod.local` et les images uploadées doivent rester physiquement présents côté serveur même s'ils ne sont plus suivis par Git.
++
++### Vérification MAILER_DSN sans fuite secret
++
++```bash
++grep -n "MAILER_DSN" .env.local .env.prod.local prod.env.local .env 2>/dev/null \
++  | sed -E 's#://([^:]+):[^@]+@#://\1:***@#'
++```
++
++Validation mail réelle :
++
++```bash
++php bin/console mailer:test adresse@test.fr --env=prod
++```
++
++Un mail est validé uniquement si la boîte cible reçoit réellement le message.
+diff -ruN /mnt/data/hodina_orig_min/docs/GITIGNORE_BLOCK_RUNTIME_PRE_J5K.txt /mnt/data/hodina_dette_update/docs/GITIGNORE_BLOCK_RUNTIME_PRE_J5K.txt
+--- /mnt/data/hodina_orig_min/docs/GITIGNORE_BLOCK_RUNTIME_PRE_J5K.txt	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/hodina_dette_update/docs/GITIGNORE_BLOCK_RUNTIME_PRE_J5K.txt	2026-06-19 06:32:08.904679223 +0000
+@@ -0,0 +1,10 @@
++### Hodina — runtime, secrets et fichiers générés ###
++.env.local
++.env.*.local
++prod.env.local
++
++/public/uploads/products/*
++!/public/uploads/products/.gitkeep
++
++/public/assets/
++/public/error_log
+diff -ruN /mnt/data/hodina_orig_min/docs/PILOT_STATUS_DETAILED.md /mnt/data/hodina_dette_update/docs/PILOT_STATUS_DETAILED.md
+--- /mnt/data/hodina_orig_min/docs/PILOT_STATUS_DETAILED.md	2026-06-19 06:28:12.236338912 +0000
++++ /mnt/data/hodina_dette_update/docs/PILOT_STATUS_DETAILED.md	2026-06-19 06:32:08.901784518 +0000
+@@ -1047,3 +1047,28 @@
+ 5. J5M livreur terrain.
+ 6. Paiement plus tard.
+ ```
++
++
++## Point de statut — Dette technique pré-J5K
++
++Après J5G-B4 v11, la prochaine étape courte est le nettoyage Git env/uploads/assets et la clarification `MAILER_DSN`.
++
++### À valider avant J5K
++
++```text
++.env.local / .env.prod.local / prod.env.local hors Git
++public/uploads/products hors Git sauf .gitkeep
++public/assets hors Git
++public/error_log hors Git
++MAILER_DSN réel documenté côté serveur
++Validation mail = EmailLog SENT + réception réelle
++```
++
++### Pourquoi c'est important pour le pilote
++
++J5K va ajouter de la donnée de livraison. Avant cela, il faut éviter que Git mélange :
++
++- secrets serveur ;
++- photos produits uploadées ;
++- assets générés ;
++- futures données GPS métier.
+diff -ruN /mnt/data/hodina_orig_min/docs/README_ACTIONS_DETTE_TECHNIQUE_PRE_J5K.md /mnt/data/hodina_dette_update/docs/README_ACTIONS_DETTE_TECHNIQUE_PRE_J5K.md
+--- /mnt/data/hodina_orig_min/docs/README_ACTIONS_DETTE_TECHNIQUE_PRE_J5K.md	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/hodina_dette_update/docs/README_ACTIONS_DETTE_TECHNIQUE_PRE_J5K.md	2026-06-19 06:32:08.893654789 +0000
+@@ -0,0 +1,51 @@
++# Actions — dette technique pré-J5K
++
++Date : **19/06/2026**
++
++## Ordre recommandé
++
++1. Créer une branche courte depuis `main`.
++2. Appliquer le bloc `.gitignore` Hodina runtime.
++3. Sortir env / uploads / assets du suivi Git avec `git rm --cached`.
++4. Garder seulement `public/uploads/products/.gitkeep`.
++5. Vérifier `git ls-files`.
++6. Mettre à jour les docs.
++7. Committer.
++8. Déployer en recette avec le script par tag.
++9. Vérifier que les fichiers serveur existent toujours.
++10. Déployer en prod.
++
++## Branche conseillée
++
++```powershell
++git checkout main
++git pull
++git checkout -b chore/runtime-env-uploads-assets-mailer
++```
++
++## Commit conseillé
++
++```powershell
++git commit -m "chore(runtime): clean env uploads assets and document mailer dsn"
++```
++
++## Tag conseillé après merge main
++
++```powershell
++git tag pre-j5k-runtime-mailer-20260619
++git push origin pre-j5k-runtime-mailer-20260619
++```
++
++## Passage à J5K
++
++J5K peut démarrer uniquement quand :
++
++```text
++git ls-files .env.local .env.prod.local prod.env.local public/assets public/uploads/products
++```
++
++renvoie seulement :
++
++```text
++public/uploads/products/.gitkeep
++```
+diff -ruN /mnt/data/hodina_orig_min/docs/README_MAJ_DETTE_TECHNIQUE_ENV_UPLOADS_ASSETS_MAILER.md /mnt/data/hodina_dette_update/docs/README_MAJ_DETTE_TECHNIQUE_ENV_UPLOADS_ASSETS_MAILER.md
+--- /mnt/data/hodina_orig_min/docs/README_MAJ_DETTE_TECHNIQUE_ENV_UPLOADS_ASSETS_MAILER.md	2026-06-19 06:28:12.236851496 +0000
++++ /mnt/data/hodina_dette_update/docs/README_MAJ_DETTE_TECHNIQUE_ENV_UPLOADS_ASSETS_MAILER.md	2026-06-19 06:32:08.893311764 +0000
+@@ -1,79 +1,267 @@
+-# README — Dette technique courte après J5G-B4 v11
++# README — Dette technique env / uploads / assets / MAILER_DSN avant J5K
+ 
+-Date : **19/06/2026**
++Date : **19/06/2026**  
++Contexte : **après J5G-B4 v11 validé recette + production, avant J5K GPS livraison**
+ 
+ ## Objectif
+ 
+-Avant J5K GPS livraison, traiter les petites dettes qui peuvent provoquer des surprises en production.
++Traiter une dette courte et peu risquée avant d'ajouter le GPS de livraison :
+ 
+-## 1. Env locaux
++- empêcher les secrets d'environnement d'entrer dans Git ;
++- sortir les fichiers runtime déjà suivis par Git sans les supprimer physiquement ;
++- confirmer que les assets Symfony AssetMapper restent générés, non versionnés ;
++- documenter clairement `MAILER_DSN` pour recette / production ;
++- éviter de confondre `EmailLog = SENT` avec un e-mail réellement reçu.
+ 
+-Problème : `prod.env.local` est encore suivi par Git.
++Cette étape ne doit pas modifier le métier, les entités ou les migrations. Elle prépare le terrain pour J5K.
+ 
+-Objectif : le sortir du suivi sans le supprimer du serveur.
++---
+ 
+-Approche prévue :
++## Audit rapide des sources du 19/06/2026
++
++### Déjà correct / rassurant
++
++Le script :
++
++```text
++tools/deploy-hodina-by-tag.sh
++```
++
++protège déjà les éléments runtime suivants pendant une MEP :
++
++```text
++.env.local
++.env.prod.local
++prod.env.local
++public/uploads/products
++```
++
++Il tolère aussi `public/assets` comme dossier généré, puis exécute :
+ 
+ ```bash
+-git rm --cached prod.env.local
++php bin/console asset-map:compile --env=prod
++```
++
++Le mailer Symfony est bien configuré pour lire le DSN depuis l'environnement :
++
++```yaml
++# config/packages/mailer.yaml
++framework:
++    mailer:
++        dsn: '%env(MAILER_DSN)%'
+ ```
+ 
+-Puis vérifier que le fichier reste présent côté serveur.
++### Dette restante
+ 
+-## 2. Uploads produits
++La dette restante n'est pas une dette fonctionnelle. C'est une dette Git / exploitation :
+ 
+-Problème : d'anciennes images `public/uploads/products/*` sont suivies par Git.
++- `prod.env.local` est encore signalé comme suivi par Git ;
++- d'anciennes images de `public/uploads/products/*` sont encore signalées comme suivies par Git ;
++- `public/assets/` doit être explicitement ignoré ;
++- `MAILER_DSN=null://null` est utile en local / sécurité par défaut, mais dangereux si on croit valider des e-mails réels ;
++- `public/error_log` est un fichier runtime o2switch et ne doit pas être versionné.
+ 
+-Objectif : les sortir du suivi Git sans supprimer les fichiers réels.
++---
+ 
+-Approche :
++## Règles Git à verrouiller
+ 
+-```bash
+-git rm --cached public/uploads/products/<fichier>
++À ajouter ou vérifier dans le `.gitignore` racine :
++
++```gitignore
++### Hodina — runtime, secrets et fichiers générés ###
++.env.local
++.env.*.local
++prod.env.local
++
++/public/uploads/products/*
++!/public/uploads/products/.gitkeep
++
++/public/assets/
++/public/error_log
++```
++
++Remarque : `public/uploads/products/.gitkeep` permet de garder le dossier dans Git sans versionner les photos réelles.
++
++---
++
++## Commandes locales PowerShell recommandées
++
++Depuis le poste local :
++
++```powershell
++cd E:\hodina\hodina.fr
++
++git status
++
++# Créer le dossier runtime si nécessaire et garder seulement un marqueur Git.
++New-Item -ItemType Directory -Force public\uploads\products | Out-Null
++New-Item -ItemType File -Force public\uploads\products\.gitkeep | Out-Null
++
++# Ajouter le bloc .gitignore s'il n'existe pas déjà.
++$gitignore = ".gitignore"
++$block = @'
++
++### Hodina — runtime, secrets et fichiers générés ###
++.env.local
++.env.*.local
++prod.env.local
++
++/public/uploads/products/*
++!/public/uploads/products/.gitkeep
++
++/public/assets/
++/public/error_log
++'@
++
++if (-not (Test-Path $gitignore)) {
++    New-Item -ItemType File -Path $gitignore | Out-Null
++}
++
++$content = Get-Content $gitignore -Raw
++if ($content -notmatch "Hodina — runtime") {
++    Add-Content -Path $gitignore -Value $block
++}
++
++# Sortir les secrets / runtime / assets du suivi Git sans supprimer les fichiers locaux.
++git rm --cached --ignore-unmatch .env.local .env.prod.local prod.env.local
++
++git rm --cached -r --ignore-unmatch public\assets
++
++git rm --cached -r --ignore-unmatch public\uploads\products
++
++# Réajouter uniquement le marqueur de dossier upload.
++git add .gitignore public\uploads\products\.gitkeep
++
++# Vérification : seuls .gitignore, .gitkeep et les docs doivent rester à committer.
++git status --short
++
++# Vérification : aucun secret ni image réelle ne doit rester suivi.
++git ls-files .env.local .env.prod.local prod.env.local public/assets public/uploads/products
++```
++
++Résultat attendu de la dernière commande :
++
++```text
++public/uploads/products/.gitkeep
+ ```
+ 
+-ou par lot contrôlé, après sauvegarde.
++Si une vraie image apparaît encore dans `git ls-files public/uploads/products`, ne pas continuer : il faut la ressortir du suivi.
+ 
+-## 3. Assets générés
++---
+ 
+-`public/assets` est généré par :
++## Validation serveur après merge / déploiement
++
++Sur recette puis production, vérifier que les fichiers runtime n'ont pas été supprimés :
+ 
+ ```bash
+-php bin/console asset-map:compile --env=prod
++cd /home/vopu3712/hodina.fr
++# ou /home/vopu3712/recette.hodina.fr selon la cible
++
++ls -la .env.local .env.prod.local prod.env.local 2>/dev/null || true
++ls -la public/uploads/products 2>/dev/null || true
++ls -la public/assets 2>/dev/null || true
++```
++
++Vérifier que les secrets restent hors Git :
++
++```bash
++git ls-files .env.local .env.prod.local prod.env.local public/assets public/uploads/products
+ ```
+ 
+-Il ne doit pas être commité. Vérifier / ajouter la règle `.gitignore` correspondante.
++Résultat attendu :
+ 
+-## 4. MAILER_DSN
++```text
++public/uploads/products/.gitkeep
++```
+ 
+-`.env` peut garder :
++Vérifier la configuration mail sans afficher le mot de passe :
+ 
+-```env
+-MAILER_DSN=null://null
++```bash
++grep -n "MAILER_DSN" .env.local .env.prod.local prod.env.local .env 2>/dev/null \
++  | sed -E 's#://([^:]+):[^@]+@#://\1:***@#'
+ ```
+ 
+-Mais recette / production doivent avoir un vrai DSN dans `.env.local` ou `.env.prod.local`.
++Si les e-mails réels sont attendus, la valeur active ne doit pas être uniquement :
+ 
+-Ne jamais commiter le mot de passe SMTP.
++```env
++MAILER_DSN=null://null
++```
+ 
+-Validation :
++Test mail :
+ 
+ ```bash
+ php bin/console mailer:test adresse@test.fr --env=prod
+ ```
+ 
+-## 5. Déploiement non atomique
++Validation complète :
++
++```text
++EmailLog = SENT
+++ MAILER_DSN réel côté serveur
+++ e-mail reçu dans une boîte réelle
++```
++
++---
+ 
+-Le script actuel déploie dans le dossier actif. Une requête peut tomber pendant `checkout/cache/assets`.
++## Point important sur `prod.env.local`
+ 
+-Court terme : ne pas naviguer dans l'admin pendant MEP.
++`prod.env.local` est conservé comme fichier historique / fallback opérationnel dans les scripts, mais Symfony charge naturellement :
+ 
+-Moyen terme : page maintenance ou déploiement atomique.
++```text
++.env
++.env.local
++.env.prod
++.env.prod.local
++```
+ 
+-## 6. Dépréciations
++Pour éviter toute ambiguïté, les secrets réellement utilisés par l'application doivent être dans :
++
++```text
++.env.local
++```
+ 
+-À corriger avant montée de version :
++ou :
++
++```text
++.env.prod.local
++```
++
++Ne pas compter uniquement sur `prod.env.local` pour faire fonctionner Symfony.
++
++---
++
++## Hors périmètre volontaire de cette étape
++
++Ne pas mélanger avec J5K :
++
++- pas de latitude / longitude ;
++- pas de migration ;
++- pas de changement panier ;
++- pas de changement EasyAdmin métier ;
++- pas de refonte de déploiement atomique.
++
++Autres nettoyages à garder pour plus tard si besoin :
++
++- anciens fichiers `.bak` ;
++- refonte complète `.env.example` ;
++- page maintenance ;
++- déploiement atomique ;
++- correction des dépréciations Symfony / Doctrine.
++
++---
++
++## Commit conseillé
++
++```bash
++git add .gitignore public/uploads/products/.gitkeep docs tools
++
++git commit -m "chore(runtime): clean env uploads assets and document mailer dsn"
++```
++
++Puis, après validation :
++
++```bash
++git push
++```
+ 
+-- `#[AdminDashboard]` manquant sur `DashboardController`.
+-- `doctrine.orm.controller_resolver.auto_mapping` déprécié.
+-- migrations avec transaction implicite.
++Cette étape doit être validée avant d'ouvrir J5K GPS livraison.
+diff -ruN /mnt/data/hodina_orig_min/docs/ROADMAP.md /mnt/data/hodina_dette_update/docs/ROADMAP.md
+--- /mnt/data/hodina_orig_min/docs/ROADMAP.md	2026-06-19 06:28:12.240264870 +0000
++++ /mnt/data/hodina_dette_update/docs/ROADMAP.md	2026-06-19 06:32:08.904426671 +0000
+@@ -2294,3 +2294,28 @@
+ - la disponibilité vendeurs ;
+ - le coût réel logistique ;
+ - la conversion catalogue → panier → commande.
++
++
++## Mise à jour roadmap — Dette pré-J5K
++
++Avant J5K GPS livraison, une étape courte de stabilisation runtime est placée explicitement :
++
++```text
++J5G-B4 v11 validé
++→ dette env/uploads/assets/MAILER_DSN
++→ J5K GPS livraison
++→ J5L admin terrain
++→ J5M portail livreur
++```
++
++Critère de passage vers J5K :
++
++```text
++git ls-files .env.local .env.prod.local prod.env.local public/assets public/uploads/products
++```
++
++ne doit retourner que :
++
++```text
++public/uploads/products/.gitkeep
++```
+diff -ruN /mnt/data/hodina_orig_min/docs/WORKFLOWS.md /mnt/data/hodina_dette_update/docs/WORKFLOWS.md
+--- /mnt/data/hodina_orig_min/docs/WORKFLOWS.md	2026-06-19 06:28:12.241747592 +0000
++++ /mnt/data/hodina_dette_update/docs/WORKFLOWS.md	2026-06-19 06:32:08.901263556 +0000
+@@ -2776,3 +2776,38 @@
+ → ouvrir une fenêtre privée
+ → tester accueil, admin, panier, email, miniatures
+ ```
++
++
++## Workflow pré-J5K — Dette runtime / mailer
++
++### Objectif
++
++Nettoyer les règles Git avant d'ajouter le GPS de livraison.
++
++### Flux
++
++```text
++Développeur local
++→ ajoute bloc .gitignore runtime
++→ git rm --cached env/uploads/assets
++→ garde public/uploads/products/.gitkeep
++→ vérifie git ls-files
++→ commit docs + règles Git
++→ déploie recette par tag
++→ vérifie env/uploads/assets côté serveur
++→ teste MAILER_DSN si e-mails réels attendus
++→ déploie production
++→ démarre J5K
++```
++
++### Point de contrôle obligatoire
++
++```bash
++git ls-files .env.local .env.prod.local prod.env.local public/assets public/uploads/products
++```
++
++La seule sortie acceptable est :
++
++```text
++public/uploads/products/.gitkeep
++```
+diff -ruN /mnt/data/hodina_orig_min/tools/dette-runtime-mailer-pre-j5k.ps1 /mnt/data/hodina_dette_update/tools/dette-runtime-mailer-pre-j5k.ps1
+--- /mnt/data/hodina_orig_min/tools/dette-runtime-mailer-pre-j5k.ps1	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/hodina_dette_update/tools/dette-runtime-mailer-pre-j5k.ps1	2026-06-19 06:32:08.893730280 +0000
+@@ -0,0 +1,75 @@
++<#
++Hodina — dette technique runtime / mailer avant J5K
++Date : 2026-06-19
++
++Objectif :
++- ajouter les règles .gitignore runtime ;
++- sortir env/uploads/assets du suivi Git sans supprimer les fichiers locaux ;
++- conserver public/uploads/products/.gitkeep ;
++- afficher les vérifications à relire avant commit.
++
++À lancer depuis : E:\hodina\hodina.fr
++#>
++
++$ErrorActionPreference = "Stop"
++
++Write-Host "== Hodina dette runtime / mailer pré-J5K =="
++
++if (-not (Test-Path ".git")) {
++    throw "Ce dossier ne semble pas être un dépôt Git. Place-toi dans E:\hodina\hodina.fr."
++}
++
++Write-Host "\n[1/5] Statut initial"
++git status --short
++
++Write-Host "\n[2/5] Préparation du dossier uploads runtime"
++New-Item -ItemType Directory -Force "public\uploads\products" | Out-Null
++New-Item -ItemType File -Force "public\uploads\products\.gitkeep" | Out-Null
++
++Write-Host "\n[3/5] Ajout / vérification du bloc .gitignore"
++$gitignore = ".gitignore"
++$marker = "Hodina — runtime"
++$block = @'
++
++### Hodina — runtime, secrets et fichiers générés ###
++.env.local
++.env.*.local
++prod.env.local
++
++/public/uploads/products/*
++!/public/uploads/products/.gitkeep
++
++/public/assets/
++/public/error_log
++'@
++
++if (-not (Test-Path $gitignore)) {
++    New-Item -ItemType File -Path $gitignore | Out-Null
++}
++
++$content = Get-Content $gitignore -Raw
++if ($content -notmatch [regex]::Escape($marker)) {
++    Add-Content -Path $gitignore -Value $block
++    Write-Host "Bloc .gitignore ajouté."
++} else {
++    Write-Host "Bloc .gitignore déjà présent."
++}
++
++Write-Host "\n[4/5] Sortie du suivi Git sans suppression locale"
++git rm --cached --ignore-unmatch .env.local .env.prod.local prod.env.local
++
++git rm --cached -r --ignore-unmatch public\assets
++
++git rm --cached -r --ignore-unmatch public\uploads\products
++
++git add .gitignore public\uploads\products\.gitkeep
++
++Write-Host "\n[5/5] Vérifications"
++Write-Host "\n--- git status --short ---"
++git status --short
++
++Write-Host "\n--- fichiers sensibles encore suivis ? ---"
++git ls-files .env.local .env.prod.local prod.env.local public/assets public/uploads/products
++
++Write-Host "\nRésultat attendu ci-dessus : public/uploads/products/.gitkeep uniquement."
++Write-Host "Relis le statut avant commit. Ne committe aucun secret ni aucune image uploadée."

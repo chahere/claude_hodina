@@ -1,0 +1,544 @@
+{% extends 'base.html.twig' %}
+{% block title %}Checkout – Hodina{% endblock %}
+
+{% block body %}
+<section class="section">
+  <div class="container">
+
+    <h1>Checkout</h1>
+
+    {% if app.user %}
+      <div class="point" style="margin-bottom:12px;">
+        <strong>Connecté avec ton compte Hodina</strong>
+        <p class="muted small">
+          Ta commande sera rattachée à ton compte. Choisis une adresse de livraison ou ajoute-en une nouvelle.
+        </p>
+
+        <div class="checkout-account-summary">
+          <div><strong>{{ app.user.firstName }} {{ app.user.lastName }}</strong></div>
+          <div class="muted small">{{ app.user.email }}</div>
+          <div class="muted small">{{ app.user.phone }}</div>
+        </div>
+      </div>
+    {% else %}
+      <p class="muted">Renseigne tes infos. Pendant le pilote, un admin valide la commande avant livraison.</p>
+    {% endif %}
+
+    <div class="cart-layout">
+      <div>
+        {{ form_start(form, {'attr': {'id': 'checkout-form'}}) }}
+
+          <div class="point">
+            {% if app.user %}
+              <div style="display:none;">
+                {{ form_row(form.firstName) }}
+                {{ form_row(form.lastName) }}
+                {{ form_row(form.phoneCountryCode) }}
+                {{ form_row(form.phone) }}
+                {{ form_row(form.email) }}
+              </div>
+            {% else %}
+              {{ form_row(form.firstName) }}
+              {{ form_row(form.lastName) }}
+              {{ form_row(form.phoneCountryCode) }}
+              {{ form_row(form.phone) }}
+
+              <div class="client-form-field{% if form.email.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.email, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.email, {'attr': {'class': 'client-form-control'}}) }}
+                {% if form.email.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.email) }}</div>
+                {% endif %}
+              </div>
+            {% endif %}
+
+            {{ form_widget(form.existingAddressId) }}
+
+            {% if app.user and customerAddresses is not empty %}
+              <div class="point" style="margin-bottom:12px;">
+                <strong>Mes adresses de livraison</strong>
+
+                <div class="saved-addresses">
+                  {% for addr in customerAddresses %}
+                    <button
+                      type="button"
+                      class="saved-address-btn"
+                      data-address-id="{{ addr.id }}"
+                      data-line1="{{ addr.line1 }}"
+                      data-postal-code="{{ addr.postalCode }}"
+                      data-commune="{{ addr.commune }}"
+                      data-zone="{{ addr.deliveryZone ? addr.deliveryZone.code : 'GT' }}"
+                    >
+                      <strong>{{ addr.label ?: 'Adresse' }}</strong><br>
+                      <span class="muted small">{{ addr.line1 }}</span>
+                      <br><span class="muted small">{{ addr.postalCode }} {{ addr.commune }}</span>
+                      {% if addr.deliveryZone %}
+                        <br><span class="muted small">Zone : {{ addr.deliveryZone.code }}</span>
+                      {% endif %}
+                    </button>
+                  {% endfor %}
+                </div>
+
+                <button type="button" class="btn btn-secondary" id="use-new-address" style="margin-top:10px;">
+                  Utiliser une nouvelle adresse
+                </button>
+              </div>
+            {% endif %}
+
+            <div id="checkout-address-block">
+              <h3 style="margin-top:0;">Adresse de livraison</h3>
+
+              <div class="client-form-field{% if form.address.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.address, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.address, {'attr': {'class': 'client-form-control'}}) }}
+                {% if form.address.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.address) }}</div>
+                {% endif %}
+              </div>
+
+              <div class="client-form-field{% if form.commune.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.commune, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.commune, {'attr': {'class': 'client-form-control'}}) }}
+                <p class="muted small">Choisis une commune livrée Hodina. Le code postal et la zone sont déduits automatiquement.</p>
+                {% if form.commune.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.commune) }}</div>
+                {% endif %}
+              </div>
+
+              <div class="client-form-field{% if form.postalCode.vars.errors|length > 0 %} has-error{% endif %}">
+                {{ form_label(form.postalCode, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                {{ form_widget(form.postalCode, {'attr': {'class': 'client-form-control', 'readonly': 'readonly'}}) }}
+                <p class="muted small">Prérempli depuis la commune livrée. Le serveur le recalcule à la validation.</p>
+                {% if form.postalCode.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.postalCode) }}</div>
+                {% endif %}
+              </div>
+
+              {{ form_widget(form.zone) }}
+              <div class="client-form-field{% if form.zone.vars.errors|length > 0 %} has-error{% endif %}">
+                <span class="client-form-label">Zone de livraison</span>
+                <div id="checkout-zone-preview" class="client-form-control" aria-live="polite">
+                  Choisis une commune livrée.
+                </div>
+                <p class="muted small">La zone n’est plus choisie par le client : Hodina la déduit côté serveur.</p>
+                {% if form.zone.vars.errors|length > 0 %}
+                  <div class="client-form-errors">{{ form_errors(form.zone) }}</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div id="checkout-billing-block" class="point" style="margin-top:12px;">
+              <h3 style="margin-top:0;">Adresse de facturation</h3>
+              <p class="muted small">La facturation peut utiliser une adresse hors zone livrable. Le code postal doit rester au format français à 5 chiffres.</p>
+              {{ form_row(form.useBillingSameAsDelivery) }}
+              <div id="checkout-billing-fields">
+                <div class="client-form-field{% if form.billingAddress.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.billingAddress, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.billingAddress, {'attr': {'class': 'client-form-control'}}) }}
+                  {% if form.billingAddress.vars.errors|length > 0 %}
+                    <div class="client-form-errors">{{ form_errors(form.billingAddress) }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="client-form-field{% if form.billingPostalCode.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.billingPostalCode, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.billingPostalCode, {'attr': {'class': 'client-form-control'}}) }}
+                  {% if form.billingPostalCode.vars.errors|length > 0 %}
+                    <div class="client-form-errors">{{ form_errors(form.billingPostalCode) }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="client-form-field{% if form.billingCommune.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.billingCommune, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.billingCommune, {'attr': {'class': 'client-form-control'}}) }}
+                  {% if form.billingCommune.vars.errors|length > 0 %}
+                    <div class="client-form-errors">{{ form_errors(form.billingCommune) }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="client-form-field{% if form.billingZone.vars.errors|length > 0 %} has-error{% endif %}">
+                  {{ form_label(form.billingZone, null, {'label_attr': {'class': 'client-form-label'}}) }}
+                  {{ form_widget(form.billingZone, {'attr': {'class': 'client-form-control'}}) }}
+                  <p class="muted small">Choisis AUTRE pour une facturation hors zone livrable, ou PT/GT si l’adresse de facturation est à Mayotte.</p>
+                  {% if form.billingZone.vars.errors|length > 0 %}
+                    <div class="client-form-errors">{{ form_errors(form.billingZone) }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <div class="cart-summary checkout-summary-before-submit" style="margin-top:12px;">
+              <div class="summary-card">
+                <h3 class="summary-title">Récapitulatif</h3>
+                <div class="summary-row">
+                  <span>Articles</span>
+                  <strong>{{ cart.totalQty }}</strong>
+                </div>
+                <div class="summary-row summary-total">
+                  <span>Total produits</span>
+                  <strong data-checkout-products-total data-products-total="{{ cart.total }}">{{ cart.total|number_format(2, ',', ' ') }} €</strong>
+                </div>
+
+                <div
+                  id="checkout-logistics-preview"
+                  class="cart-logistics-preview"
+                  data-preview-url="{{ path('cart_logistics_preview') }}"
+                  aria-live="polite"
+                >
+                  <div class="cart-logistics-title">Livraison estimée</div>
+                  <p class="cart-logistics-message" data-logistics-message>
+                    Choisis une commune livrée pour recalculer les frais de livraison.
+                  </p>
+                  <div class="cart-logistics-meta" data-logistics-commune-row hidden>
+                    Commune utilisée : <strong data-logistics-commune></strong>
+                    <span data-logistics-territory></span>
+                  </div>
+                  <div class="cart-logistics-meta" data-logistics-barge-row hidden>
+                    Barge : <strong data-logistics-barge></strong>
+                  </div>
+                  <div class="cart-logistics-meta" data-logistics-route-row hidden>
+                    Trajet détecté : <strong data-logistics-route></strong>
+                  </div>
+                  <div class="cart-logistics-meta" data-logistics-links-row hidden>
+                    Liaisons : <strong data-logistics-land></strong> terrestre(s)
+                    <span data-logistics-barge-links-wrap hidden> · <strong data-logistics-barge-links></strong> barge</span>
+                  </div>
+                  <details class="cart-logistics-routes" data-logistics-routes-wrap hidden>
+                    <summary>Détail des trajets vendeurs</summary>
+                    <ul data-logistics-routes></ul>
+                  </details>
+                  <div class="summary-row cart-logistics-fee" data-logistics-fee-row hidden>
+                    <span>Frais livraison estimés</span>
+                    <strong data-logistics-fee></strong>
+                  </div>
+                  <p class="cart-logistics-fee-note" data-logistics-fee-reason hidden></p>
+                  <div class="summary-row summary-total cart-logistics-total" data-logistics-total-row hidden>
+                    <span>Total estimé</span>
+                    <strong data-logistics-total></strong>
+                  </div>
+                  <ul class="cart-logistics-warnings" data-logistics-warnings hidden></ul>
+                </div>
+
+                {% if billingAddress is not empty %}
+                  <div class="summary-row">
+                    <span>Facturation</span>
+                    <strong style="text-align:right;">{{ billingAddress.line1 }}</strong>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="point" style="margin-top:12px;">
+              <label style="display:flex; gap:10px; align-items:flex-start;">
+                {{ form_widget(form.acceptTerms) }}
+                <span>
+                  J’accepte les
+                  <a href="{{ path('app_cgv') }}" target="_blank" rel="noopener">Conditions Générales de Vente</a>
+                  et les
+                  <a href="{{ path('app_cgu') }}" target="_blank" rel="noopener">Conditions Générales d’Utilisation</a>
+                  de Hodina.
+                </span>
+              </label>
+              {{ form_errors(form.acceptTerms) }}
+            </div>
+          </div>
+
+          <div style="margin-top:12px;">
+            <button id="checkout-submit" class="btn btn-primary" type="submit" disabled>
+              Valider la commande
+            </button>
+          </div>
+
+        {{ form_end(form) }}
+
+        <p class="muted small" style="margin-top:10px;">
+          Le bouton s’active quand tous les champs nécessaires sont remplis.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  const form = document.getElementById('checkout-form');
+  const btn = document.getElementById('checkout-submit');
+  if(!form || !btn) return;
+
+  const requiredSelectors = [
+    '#checkout_firstName',
+    '#checkout_lastName',
+    '#checkout_phone',
+    '#checkout_email',
+    '#checkout_address',
+    '#checkout_commune',
+    '#checkout_postalCode',
+    '#checkout_acceptTerms'
+  ];
+
+  const isValid = () => {
+    const baseOk = requiredSelectors.every(sel => {
+      const el = form.querySelector(sel);
+      if(!el) return false;
+      if (el.type === 'checkbox') {
+        return el.checked;
+      }
+
+      const v = (el.value || '').trim();
+      return v.length > 0 && v !== '0';
+    });
+
+    if (!baseOk) return false;
+
+    const sameBilling = form.querySelector('#checkout_useBillingSameAsDelivery');
+    if (sameBilling && sameBilling.checked) return true;
+
+    return ['#checkout_billingAddress', '#checkout_billingPostalCode', '#checkout_billingCommune', '#checkout_billingZone'].every(sel => {
+      const el = form.querySelector(sel);
+      return el && (el.value || '').trim().length > 0;
+    });
+  };
+
+  const formatZoneLabel = (zone) => {
+    if (zone === 'PT') return 'Petite-Terre (PT)';
+    if (zone === 'GT') return 'Grande-Terre (GT)';
+    return zone || 'Choisis une commune livrée.';
+  };
+
+  const logisticsBox = document.getElementById('checkout-logistics-preview');
+  let logisticsAbortController = null;
+
+  const setText = (selector, value) => {
+    const el = logisticsBox ? logisticsBox.querySelector(selector) : null;
+    if (el) el.textContent = value || '';
+  };
+
+  const setHidden = (selector, hidden) => {
+    const el = logisticsBox ? logisticsBox.querySelector(selector) : null;
+    if (el) el.hidden = hidden;
+  };
+
+  const renderWarnings = (warnings) => {
+    const list = logisticsBox ? logisticsBox.querySelector('[data-logistics-warnings]') : null;
+    if (!list) return;
+
+    list.innerHTML = '';
+    (warnings || []).forEach((warning) => {
+      const li = document.createElement('li');
+      li.textContent = warning;
+      list.appendChild(li);
+    });
+
+    list.hidden = !warnings || warnings.length === 0;
+  };
+
+  const renderRoutes = (routes) => {
+    const wrap = logisticsBox ? logisticsBox.querySelector('[data-logistics-routes-wrap]') : null;
+    const list = logisticsBox ? logisticsBox.querySelector('[data-logistics-routes]') : null;
+    if (!wrap || !list) return;
+
+    list.innerHTML = '';
+    (routes || []).forEach((route) => {
+      const li = document.createElement('li');
+      const seller = route.sellerName || 'Vendeur';
+      const summary = route.found ? (route.summary || 'trajet détecté') : 'trajet à confirmer';
+      li.textContent = seller + ' : ' + summary + (route.requiresBarge ? ' · barge' : '');
+      list.appendChild(li);
+    });
+
+    wrap.hidden = !routes || routes.length === 0;
+  };
+
+  const buildDeliveryFeeReason = (preview) => {
+    const reasons = [];
+    const landHopCount = Number(preview.landHopCount || 0);
+    if (landHopCount > 0) {
+      reasons.push(landHopCount + ' commune' + (landHopCount > 1 ? 's' : '') + ' traversée' + (landHopCount > 1 ? 's' : ''));
+    } else if ((preview.collectionPointCount || 0) > 1) {
+      reasons.push('plusieurs communes de collecte');
+    }
+    if (preview.requiresBarge || (preview.bargeHopCount || 0) > 0) reasons.push('barge');
+    return reasons.length ? 'Inclus : ' + reasons.join(' + ') + '.' : '';
+  };
+
+  const renderLogisticsPreview = (payload) => {
+    if (!logisticsBox || !payload || !payload.preview) return;
+
+    const preview = payload.preview;
+    logisticsBox.classList.toggle('is-barge', !!preview.requiresBarge);
+    setText('[data-logistics-message]', preview.message || 'Livraison estimée mise à jour.');
+
+    const hasCommune = !!preview.clientCommuneName;
+    setHidden('[data-logistics-commune-row]', !hasCommune);
+    setText('[data-logistics-commune]', preview.clientCommuneName || '');
+    setText('[data-logistics-territory]', preview.clientTerritory ? '(' + preview.clientTerritory + ')' : '');
+
+    const hasAddress = !preview.addressRequired;
+    setHidden('[data-logistics-barge-row]', !hasAddress);
+    setText('[data-logistics-barge]', preview.requiresBarge ? 'requise' : 'non détectée');
+
+    setHidden('[data-logistics-route-row]', !preview.routeSummary);
+    setText('[data-logistics-route]', preview.routeSummary || '');
+
+    const hasLinks = !!preview.totalHopCount && preview.totalHopCount > 0;
+    setHidden('[data-logistics-links-row]', !hasLinks);
+    setText('[data-logistics-land]', String(preview.landHopCount || 0));
+    const hasBargeLinks = !!preview.bargeHopCount && preview.bargeHopCount > 0;
+    setHidden('[data-logistics-barge-links-wrap]', !hasBargeLinks);
+    setText('[data-logistics-barge-links]', String(preview.bargeHopCount || 0));
+
+    const hasFee = payload.deliveryFee !== null && payload.deliveryFee !== undefined;
+    setHidden('[data-logistics-fee-row]', !hasFee);
+    setHidden('[data-logistics-total-row]', !hasFee);
+    setText('[data-logistics-fee]', payload.deliveryFeeFormatted || '');
+    const feeReason = buildDeliveryFeeReason(preview);
+    setHidden('[data-logistics-fee-reason]', !hasFee || feeReason === '');
+    setText('[data-logistics-fee-reason]', feeReason);
+    setText('[data-logistics-total]', payload.totalWithDeliveryFormatted || '');
+
+    renderRoutes(preview.sellerRouteDetails || []);
+    renderWarnings(preview.warnings || []);
+  };
+
+  const refreshLogisticsPreview = () => {
+    if (!logisticsBox) return;
+
+    const communeInput = form.querySelector('#checkout_commune');
+    const addressInput = form.querySelector('#checkout_address');
+    const url = logisticsBox.dataset.previewUrl;
+
+    if (!url || !communeInput) return;
+
+    if (logisticsAbortController) {
+      logisticsAbortController.abort();
+    }
+
+    logisticsAbortController = new AbortController();
+    setText('[data-logistics-message]', 'Recalcul de la livraison en cours…');
+
+    const body = new URLSearchParams();
+    body.set('commune', communeInput.value || '');
+    body.set('address', addressInput ? (addressInput.value || '') : '');
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+      },
+      body,
+      signal: logisticsAbortController.signal
+    })
+      .then((response) => response.json().then((payload) => ({ response, payload })))
+      .then(({ response, payload }) => {
+        if (!response.ok || payload.ok === false) {
+          setText('[data-logistics-message]', payload.message || 'Impossible de recalculer la livraison pour cette commune.');
+          setHidden('[data-logistics-fee-row]', true);
+          setHidden('[data-logistics-total-row]', true);
+          renderWarnings([]);
+          renderRoutes([]);
+          return;
+        }
+
+        renderLogisticsPreview(payload);
+      })
+      .catch((error) => {
+        if (error && error.name === 'AbortError') return;
+        setText('[data-logistics-message]', 'Le recalcul de livraison a échoué. Réessaie ou valide : le serveur recalculera quand même à la commande.');
+      });
+  };
+
+  const applyCommuneMetadata = () => {
+    const communeInput = form.querySelector('#checkout_commune');
+    const postalInput = form.querySelector('#checkout_postalCode');
+    const zoneInput = form.querySelector('#checkout_zone');
+    const zonePreview = document.getElementById('checkout-zone-preview');
+
+    const selectedOption = communeInput && communeInput.selectedIndex >= 0
+      ? communeInput.options[communeInput.selectedIndex]
+      : null;
+
+    const postalCode = selectedOption ? (selectedOption.dataset.postalCode || '') : '';
+    const zone = selectedOption ? (selectedOption.dataset.zone || '') : '';
+
+    if (postalInput) postalInput.value = postalCode;
+    if (zoneInput) zoneInput.value = zone;
+    if (zonePreview) zonePreview.textContent = formatZoneLabel(zone);
+  };
+
+  const refresh = () => {
+    const sameBilling = form.querySelector('#checkout_useBillingSameAsDelivery');
+    const billingFields = document.getElementById('checkout-billing-fields');
+    if (sameBilling && billingFields) {
+      billingFields.style.display = sameBilling.checked ? 'none' : 'block';
+    }
+
+    btn.disabled = !isValid();
+  };
+
+  form.addEventListener('input', refresh);
+  form.addEventListener('change', (event) => {
+    if (event.target && event.target.id === 'checkout_commune') {
+      applyCommuneMetadata();
+      refreshLogisticsPreview();
+    }
+
+    refresh();
+  });
+
+  document.querySelectorAll('.saved-address-btn').forEach(btnAddr => {
+    btnAddr.addEventListener('click', () => {
+      const addressInput = document.querySelector('#checkout_address');
+      const communeInput = document.querySelector('#checkout_commune');
+      const existingInput = document.querySelector('#checkout_existingAddressId');
+
+      if(addressInput) addressInput.value = btnAddr.dataset.line1 || '';
+      if(communeInput) communeInput.value = btnAddr.dataset.commune || '';
+      if(existingInput) existingInput.value = btnAddr.dataset.addressId || '';
+
+      applyCommuneMetadata();
+      refreshLogisticsPreview();
+
+      document.querySelectorAll('.saved-address-btn').forEach(b => b.classList.remove('is-selected'));
+      btnAddr.classList.add('is-selected');
+
+      refresh();
+    });
+  });
+
+  const newAddressBtn = document.getElementById('use-new-address');
+  if(newAddressBtn){
+    newAddressBtn.addEventListener('click', () => {
+      const addressInput = document.querySelector('#checkout_address');
+      const existingInput = document.querySelector('#checkout_existingAddressId');
+      const communeInput = document.querySelector('#checkout_commune');
+
+      if(existingInput) existingInput.value = '';
+      if(addressInput) {
+        addressInput.value = '';
+        addressInput.focus();
+      }
+      if(communeInput) {
+          communeInput.value = '';
+      }
+
+      applyCommuneMetadata();
+      refreshLogisticsPreview();
+      document.querySelectorAll('.saved-address-btn').forEach(b => b.classList.remove('is-selected'));
+      refresh();
+    });
+  }
+
+  const existingInput = document.querySelector('#checkout_existingAddressId');
+  if(existingInput && existingInput.value){
+    const selected = document.querySelector(`.saved-address-btn[data-address-id="${existingInput.value}"]`);
+    if(selected) selected.classList.add('is-selected');
+  }
+
+  applyCommuneMetadata();
+  refreshLogisticsPreview();
+  refresh();
+})();
+</script>
+{% endblock %}

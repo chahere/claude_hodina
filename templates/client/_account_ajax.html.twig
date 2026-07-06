@@ -1,0 +1,257 @@
+<script>
+(function () {
+  if (window.HodinaClientAccountAjaxReady) {
+    return;
+  }
+
+  window.HodinaClientAccountAjaxReady = true;
+
+  const pageSelector = '[data-client-account-page]';
+  const sameOriginAccountUrl = function (href) {
+    const url = new URL(href, window.location.href);
+
+    return url.origin === window.location.origin && url.pathname.startsWith('/mon-compte');
+  };
+
+  const currentPage = function () {
+    return document.querySelector(pageSelector);
+  };
+
+  const ensureToast = function () {
+    let toast = document.querySelector('[data-account-ajax-toast]');
+
+    if (toast) {
+      return toast;
+    }
+
+    toast = document.createElement('div');
+    toast.setAttribute('data-account-ajax-toast', '');
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.className = 'account-ajax-toast';
+    document.body.appendChild(toast);
+
+    return toast;
+  };
+
+  let toastTimer = null;
+  const showToast = function (message, type) {
+    if (!message) {
+      return;
+    }
+
+    const toast = ensureToast();
+    toast.textContent = message;
+    toast.classList.toggle('is-error', type === 'danger' || type === 'error');
+    toast.classList.toggle('is-warning', type === 'warning');
+    toast.classList.add('is-visible');
+
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(function () {
+      toast.classList.remove('is-visible');
+    }, 3200);
+  };
+
+  const showFlashesFromDocument = function (doc) {
+    const flashes = doc.querySelectorAll('.flash-list .flash');
+
+    flashes.forEach(function (flash) {
+      const type = Array.from(flash.classList).find(function (className) {
+        return className.startsWith('flash-');
+      }) || '';
+
+      showToast(flash.textContent.trim(), type.replace('flash-', ''));
+    });
+  };
+
+  const parseHtml = function (html) {
+    return new DOMParser().parseFromString(html, 'text/html');
+  };
+
+  const markTrigger = function (trigger, isLoading) {
+    if (!trigger) {
+      return;
+    }
+
+    trigger.classList.toggle('is-ajax-pending', isLoading);
+
+    if (isLoading) {
+      trigger.setAttribute('aria-busy', 'true');
+    } else {
+      trigger.removeAttribute('aria-busy');
+    }
+  };
+
+  const replaceAccountPage = function (doc, url, updateMode, options) {
+    const nextPage = doc.querySelector(pageSelector);
+    const page = currentPage();
+    const shouldKeepViewport = options && options.keepViewport === true;
+
+    if (!nextPage || !page) {
+      window.location.href = url;
+      return;
+    }
+
+    page.replaceWith(nextPage);
+
+    if (doc.title) {
+      document.title = doc.title;
+    }
+
+    showFlashesFromDocument(doc);
+
+    if (updateMode === 'push') {
+      window.history.pushState({hodinaClientAccount: true}, '', url);
+    } else if (updateMode === 'replace') {
+      window.history.replaceState({hodinaClientAccount: true}, '', url);
+    }
+
+    const title = nextPage.querySelector('h1');
+    if (title) {
+      title.setAttribute('tabindex', '-1');
+      title.focus({preventScroll: true});
+    }
+
+    if (!shouldKeepViewport && nextPage.getBoundingClientRect().top < 0) {
+      nextPage.scrollIntoView({block: 'start'});
+    }
+  };
+
+  const setLoading = function (isLoading) {
+    const page = currentPage();
+    if (!page) {
+      return;
+    }
+
+    page.classList.toggle('is-loading', isLoading);
+    page.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+  };
+
+  const fetchAndReplace = async function (url, options, updateMode) {
+    const trigger = options && options.trigger ? options.trigger : null;
+    const keepViewport = options && options.keepViewport === true;
+    const fetchOptions = Object.assign({}, options || {});
+    delete fetchOptions.trigger;
+    delete fetchOptions.keepViewport;
+
+    setLoading(true);
+    markTrigger(trigger, true);
+
+    try {
+      const response = await fetch(url, Object.assign({
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'text/html',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      }, fetchOptions));
+
+      const html = await response.text();
+      const doc = parseHtml(html);
+      const finalUrl = response.url || url;
+
+      if (!response.ok && !doc.querySelector(pageSelector)) {
+        throw new Error('Réponse indisponible.');
+      }
+
+      replaceAccountPage(doc, finalUrl, updateMode, {keepViewport: keepViewport});
+    } catch (error) {
+      showToast('La mise à jour sans rechargement a échoué. La page va être rechargée.', 'error');
+      window.setTimeout(function () {
+        window.location.href = url;
+      }, 450);
+    } finally {
+      setLoading(false);
+      markTrigger(trigger, false);
+    }
+  };
+
+  document.addEventListener('click', function (event) {
+    const link = event.target.closest('a[href]');
+
+    if (!link || !currentPage()) {
+      return;
+    }
+
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+
+    if (link.target || link.hasAttribute('download')) {
+      return;
+    }
+
+    if (!sameOriginAccountUrl(link.href)) {
+      return;
+    }
+
+    const nextUrl = new URL(link.href, window.location.href);
+    if (nextUrl.href === window.location.href) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    fetchAndReplace(nextUrl.href, {method: 'GET', trigger: link, keepViewport: true}, 'push');
+  });
+
+  document.addEventListener('submit', function (event) {
+    const form = event.target.closest('form');
+
+    if (!form || !currentPage() || !sameOriginAccountUrl(form.action || window.location.href)) {
+      return;
+    }
+
+    const confirmationMessage = form.getAttribute('data-confirm-message');
+    if (confirmationMessage && !window.confirm(confirmationMessage)) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+
+    if (form.dataset.ajaxSubmitting === '1') {
+      return;
+    }
+
+    const submitter = event.submitter || form.querySelector('[type="submit"]');
+    const formData = new FormData(form);
+
+    if (submitter && submitter.name) {
+      formData.append(submitter.name, submitter.value || '');
+    }
+
+    form.dataset.ajaxSubmitting = '1';
+    form.classList.add('is-submitting');
+
+    if (submitter) {
+      submitter.dataset.originalLabel = submitter.textContent.trim();
+      submitter.disabled = true;
+      submitter.textContent = 'Patiente...';
+    }
+
+    fetchAndReplace(form.action || window.location.href, {
+      method: (form.method || 'POST').toUpperCase(),
+      body: formData,
+      trigger: submitter || form,
+      keepViewport: false
+    }, 'replace').finally(function () {
+      form.dataset.ajaxSubmitting = '0';
+      form.classList.remove('is-submitting');
+
+      if (submitter) {
+        submitter.disabled = false;
+        submitter.textContent = submitter.dataset.originalLabel || submitter.textContent;
+      }
+    });
+  });
+
+  window.addEventListener('popstate', function () {
+    if (!sameOriginAccountUrl(window.location.href)) {
+      return;
+    }
+
+    fetchAndReplace(window.location.href, {method: 'GET', keepViewport: true}, 'none');
+  });
+})();
+</script>

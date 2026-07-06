@@ -1,0 +1,84 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Catalogue – Hodina{% endblock %}
+
+{% block body %}
+<section class="catalogue">
+    <div class="container">
+        <div class="catalogue-header">
+            <div>
+                <h1 class="catalogue-title">Catalogue</h1>
+                <p class="catalogue-sub">
+                    Produits locaux disponibles maintenant. Cliquez sur un produit pour voir le détail.
+                </p>
+            </div>
+
+            <div class="catalogue-actions">
+                <a class="btn btn-secondary" href="{{ path('app_home') }}#devenir-vendeur">Devenir vendeur</a>
+            </div>
+        </div>
+
+        {% if products is empty %}
+            <div class="empty-state">
+                <p><strong>Aucun produit disponible</strong> pour le moment.</p>
+                <p class="muted">Ajoute des produits depuis le back-office, puis reviens ici.</p>
+                <a class="btn btn-primary" href="{{ path('backoffice') }}">Aller au back-office</a>
+            </div>
+        {% else %}
+            <div class="product-grid">
+                {% for product in products %}
+                    <article class="product-card">
+                        <a class="product-link" href="{{ path('product_show', { slug: product.slug }) }}">
+                            <div class="product-media">
+                                {# ✅ Image: ProductImage.path = filename, stocké dans /public/uploads/products/ #}
+                                {% set imgUrl = null %}
+
+                                {% if product.images is defined and product.images|length > 0 %}
+                                    {% set firstImg = product.images|first %}
+                                    {% set imgUrl = asset('uploads/products/' ~ firstImg.path) %}
+                                {% endif %}
+
+                                {% if imgUrl %}
+                                    <img src="{{ imgUrl }}" alt="{{ product.name }}" loading="lazy">
+                                {% else %}
+                                    <div class="product-placeholder" aria-hidden="true">
+                                        <span>🛍️</span>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="product-info">
+                                <div class="product-top">
+                                    <h2 class="product-name">{{ product.name }}</h2>
+
+                                    <div class="product-meta">
+                                        <span class="meta-item">
+                                            <span class="meta-label">Vendeur :</span>
+                                            <span class="meta-value">{{ product.seller.name }}</span>
+                                        </span>
+
+                                        <span class="meta-item">
+                                            <span class="meta-label">Catégorie :</span>
+                                            <span class="meta-value">{{ product.category.name }}</span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="product-bottom">
+                                    <div class="product-price">
+                                        {{ product.price }} <span class="currency">€</span>
+                                    </div>
+
+                                    <div class="product-cta">
+                                        <span class="cta-pill">Voir le produit</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </article>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

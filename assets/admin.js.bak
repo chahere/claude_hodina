@@ -1,0 +1,11 @@
+import './stimulus_bootstrap.js';
+
+import { startStimulusApp } from '@symfony/stimulus-bundle';
+import StockController from './controllers/stock_controller.js';
+import ProductImagesController from './controllers/product_images_controller.js';
+
+const app = startStimulusApp();
+app.register('stock', StockController);
+app.register('product-images', ProductImagesController);
+
+console.log('[admin] stimulus loaded');

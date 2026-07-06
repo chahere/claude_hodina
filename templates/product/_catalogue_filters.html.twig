@@ -1,0 +1,65 @@
+{% set hasAdvancedFilters = selectedCategorySlug or currentSort %}
+{% set hasActiveFilters = currentSearch or selectedCategorySlug or currentSort %}
+
+<form class="catalogue-filters" method="get" action="{{ path('product_catalogue') }}" data-catalogue-filter-form>
+    <div class="catalogue-quickbar">
+        <label class="catalogue-search-label" for="catalogue-search">Recherche</label>
+        <div class="catalogue-search-inline">
+            <input
+                id="catalogue-search"
+                type="search"
+                name="q"
+                value="{{ currentSearch }}"
+                placeholder="Rechercher un produit, un vendeur…"
+                autocomplete="off"
+            >
+            <button class="catalogue-search-submit" type="submit" aria-label="Rechercher">🔍</button>
+        </div>
+
+        <button
+            class="catalogue-filter-toggle{% if hasAdvancedFilters %} is-active{% endif %}"
+            type="button"
+            aria-expanded="true"
+            aria-controls="catalogue-filter-panel"
+            data-catalogue-filter-toggle
+        >
+            Filtres
+        </button>
+    </div>
+
+    <div
+        id="catalogue-filter-panel"
+        class="catalogue-filter-panel{% if hasAdvancedFilters %} is-open{% endif %}"
+        data-catalogue-filter-panel
+        data-open-on-load="{{ hasAdvancedFilters ? 'true' : 'false' }}"
+    >
+        <div class="catalogue-filter-field">
+            <label for="catalogue-category">Catégorie</label>
+            <select id="catalogue-category" name="categorie">
+                <option value="">Toutes les catégories</option>
+                {% for category in categories %}
+                    <option value="{{ category.slug }}" {% if selectedCategorySlug == category.slug %}selected{% endif %}>
+                        {{ category.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="catalogue-filter-field">
+            <label for="catalogue-sort">Trier</label>
+            <select id="catalogue-sort" name="tri">
+                <option value="" {% if currentSort == '' %}selected{% endif %}>Ordre Hodina</option>
+                {% for sortValue, sortLabel in sortChoices %}
+                    <option value="{{ sortValue }}" {% if currentSort == sortValue %}selected{% endif %}>{{ sortLabel }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="catalogue-filter-actions">
+            <button class="btn btn-primary" type="submit">Appliquer</button>
+            {% if hasActiveFilters %}
+                <a class="btn btn-secondary" href="{{ path('product_catalogue') }}">Réinitialiser</a>
+            {% endif %}
+        </div>
+    </div>
+</form>
