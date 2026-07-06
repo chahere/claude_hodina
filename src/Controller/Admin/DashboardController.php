@@ -2,6 +2,7 @@
 
 namespace App\Controller\Admin;
 
+use App\Entity\AddressLocality;
 use App\Entity\Category;
 use App\Entity\Customer;
 use App\Entity\CourierPayout;
@@ -26,6 +27,7 @@ use App\Entity\Seller;
 use App\Entity\SmsLog;
 use App\Entity\SupportTicket;
 use Doctrine\ORM\EntityManagerInterface;
+use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -37,6 +39,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
+#[AdminDashboard(routePath: '/ouegnewe', routeName: 'backoffice')]
 #[IsGranted('ROLE_ADMIN')]
 class DashboardController extends AbstractDashboardController
 {
@@ -56,9 +59,9 @@ class DashboardController extends AbstractDashboardController
 
     /**
      * Entrée backoffice.
+     * Route déclarée par #[AdminDashboard] sur la classe pour compatibilité EasyAdmin 4.24+/5.
      * IMPORTANT : index() doit rester sans argument (signature parent).
      */
-    #[Route('/ouegnewe', name: 'backoffice')]
     public function index(): Response
     {
         return $this->redirectToRoute('backoffice_dashboard');
