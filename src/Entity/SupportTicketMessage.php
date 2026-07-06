@@ -10,6 +10,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity(repositoryClass: SupportTicketMessageRepository::class)]
 #[ORM\Table(name: 'support_ticket_message')]
 #[ORM\Index(name: 'IDX_SUPPORT_TICKET_MESSAGE_TICKET', columns: ['support_ticket_id'])]
+#[ORM\Index(name: 'IDX_SUPPORT_TICKET_MESSAGE_AUTHOR', columns: ['author_customer_id'])]
 class SupportTicketMessage
 {
     public const SENDER_CUSTOMER = 'CUSTOMER';
