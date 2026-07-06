@@ -1,0 +1,13 @@
+framework:
+    http_client:
+        scoped_clients:
+            # Clients HTTP serveur-à-serveur dédiés au chatbot IA (voir
+            # src/Service/Ai/). La clé API est passée par requête, jamais
+            # stockée sur le client lui-même.
+            anthropic.client:
+                base_uri: 'https://api.anthropic.com'
+                timeout: 15
+
+            openai.client:
+                base_uri: 'https://api.openai.com'
+                timeout: 15

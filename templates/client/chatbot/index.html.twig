@@ -1,0 +1,173 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Assistant Hodina – Mon compte{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        .chatbot-card {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .chatbot-thread {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 55vh;
+            overflow-y: auto;
+            padding: 4px 2px;
+        }
+
+        .chatbot-bubble {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 16px;
+            line-height: 1.4;
+            white-space: pre-line;
+        }
+
+        .chatbot-bubble.is-user {
+            align-self: flex-end;
+            background: #2f7d4f;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chatbot-bubble.is-assistant {
+            align-self: flex-start;
+            background: #f1ede6;
+            color: #2b190d;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chatbot-empty {
+            color: #6e5a47;
+            font-style: italic;
+        }
+
+        .chatbot-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chatbot-input {
+            flex: 1;
+            border: 1px solid rgba(96, 62, 30, 0.22);
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .chatbot-error {
+            color: #9f1d1d;
+            font-weight: 700;
+            font-size: 0.92rem;
+        }
+    </style>
+{% endblock %}
+
+{% block body %}
+<section class="section account-page" data-client-account-page>
+  <div class="container account-container">
+    <div class="account-header">
+      <p class="account-kicker">Mon compte</p>
+      <h1>Assistant Hodina</h1>
+      <p class="muted">Pose une question sur une commande, la livraison ou le catalogue. Un humain prend le relais si l’assistant ne peut pas répondre.</p>
+    </div>
+
+    {% include 'client/_account_nav.html.twig' %}
+
+    <article class="account-card chatbot-card">
+      <div class="chatbot-thread" data-chatbot-thread>
+        {% if messages is empty %}
+          <p class="chatbot-empty" data-chatbot-empty>Écris ton premier message pour démarrer la conversation.</p>
+        {% else %}
+          {% for message in messages %}
+            <div class="chatbot-bubble {{ message.role == 'USER' ? 'is-user' : 'is-assistant' }}">{{ message.content }}</div>
+          {% endfor %}
+        {% endif %}
+      </div>
+
+      <p class="chatbot-error" data-chatbot-error hidden></p>
+
+      <form class="chatbot-form" data-chatbot-form>
+        <input type="text" name="message" class="chatbot-input" placeholder="Écris ton message…" maxlength="2000" required autocomplete="off">
+        <button type="submit" class="btn btn-primary">Envoyer</button>
+      </form>
+    </article>
+  </div>
+</section>
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script>
+(function () {
+    const form = document.querySelector('[data-chatbot-form]');
+    const thread = document.querySelector('[data-chatbot-thread]');
+    const emptyState = document.querySelector('[data-chatbot-empty]');
+    const errorBox = document.querySelector('[data-chatbot-error]');
+    if (!form || !thread) {
+        return;
+    }
+
+    const csrfToken = {{ csrf_token('chatbot_send')|json_encode|raw }};
+
+    const addBubble = (role, text) => {
+        if (emptyState) {
+            emptyState.remove();
+        }
+        const bubble = document.createElement('div');
+        bubble.className = 'chatbot-bubble ' + (role === 'user' ? 'is-user' : 'is-assistant');
+        bubble.textContent = text;
+        thread.appendChild(bubble);
+        thread.scrollTop = thread.scrollHeight;
+    };
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const input = form.querySelector('input[name="message"]');
+        const message = (input.value || '').trim();
+        if (!message) {
+            return;
+        }
+
+        errorBox.hidden = true;
+        const submitButton = form.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        input.disabled = true;
+
+        addBubble('user', message);
+        input.value = '';
+
+        try {
+            const response = await fetch('{{ path('client_chatbot_send') }}', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message, _token: csrfToken }),
+            });
+
+            const data = await response.json().catch(() => null);
+
+            if (!response.ok || !data || !data.reply) {
+                throw new Error((data && data.error) || 'Réponse indisponible pour le moment.');
+            }
+
+            addBubble('assistant', data.reply);
+        } catch (error) {
+            errorBox.textContent = error.message || 'Une erreur est survenue.';
+            errorBox.hidden = false;
+        } finally {
+            submitButton.disabled = false;
+            input.disabled = false;
+            input.focus();
+        }
+    });
+})();
+</script>
+{% endblock %}

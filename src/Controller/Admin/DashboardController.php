@@ -172,6 +172,7 @@ class DashboardController extends AbstractDashboardController
             ->setController(HodinaSettingPaymentsCrudController::class);
         yield MenuItem::linkToCrud('Technique / maintenance', 'fa fa-tools', HodinaSetting::class)
             ->setController(HodinaSettingTechnicalCrudController::class);
+        yield MenuItem::linkToRoute('Réglages IA', 'fa fa-robot', 'admin_ai_chatbot_setting_entry');
         yield MenuItem::linkToRoute('Initialiser préouverture', 'fa fa-hourglass-start', 'admin_sales_opening_init');
 
         yield MenuItem::section('Logistique');

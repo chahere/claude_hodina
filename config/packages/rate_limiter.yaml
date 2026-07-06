@@ -1,0 +1,14 @@
+framework:
+    rate_limiter:
+        # Limite le chatbot IA par client connecté (protège contre l'abus de
+        # coût API et le scraping du catalogue via les réponses IA).
+        chatbot_per_customer:
+            policy: 'sliding_window'
+            limit: 20
+            interval: '5 minutes'
+
+        # Limite complémentaire par adresse IP, indépendante du compte client.
+        chatbot_per_ip:
+            policy: 'sliding_window'
+            limit: 30
+            interval: '5 minutes'
