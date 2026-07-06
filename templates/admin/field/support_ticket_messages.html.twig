@@ -1,0 +1,27 @@
+{% set messages = field.value %}
+{% if messages is empty %}
+    <span class="badge badge-secondary">Aucun échange</span>
+{% else %}
+    <div class="support-ticket-thread">
+        {% for message in messages %}
+            {% if message.senderType == 'ADMIN' %}
+                {% set senderLabel = 'Admin Hodina' %}
+                {% set senderColor = '#2f7d4f' %}
+            {% elseif message.senderType == 'SYSTEM' %}
+                {% set senderLabel = 'Système' %}
+                {% set senderColor = '#8a5a2b' %}
+            {% else %}
+                {% set senderLabel = 'Client' %}
+                {% set senderColor = '#3b82f6' %}
+            {% endif %}
+            <div class="support-ticket-thread-item" style="border-left: 3px solid {{ senderColor }}; padding: 8px 12px; margin-bottom: 10px; background: rgba(0,0,0,0.02);">
+                <div style="font-size: 0.85em; color: #64748b; margin-bottom: 4px;">
+                    <strong>{{ senderLabel }}</strong>
+                    {% if message.authorCustomer %} — {{ message.authorCustomer }}{% endif %}
+                    · {{ message.createdAt|date('d/m/Y H:i') }}
+                </div>
+                <div style="white-space: pre-line;">{{ message.content }}</div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}

@@ -1,0 +1,22 @@
+{% extends '@EasyAdmin/page/content.html.twig' %}
+
+{% block content_title %}
+    Clôturer le ticket — {{ ticket.subject }}
+{% endblock %}
+
+{% block main %}
+    <div class="content-panel">
+        <div class="content-panel-body with-background without-header without-footer">
+            <p class="text-muted mb-3">
+                Le ticket sera marqué comme clôturé. Cette action n’envoie aucun message automatique au contact.
+            </p>
+
+            <form method="post" class="ea-edit-form">
+                <input type="hidden" name="_token" value="{{ csrf_token('support_ticket_close_' ~ ticket.id) }}">
+
+                <button type="submit" class="btn btn-primary">Confirmer la clôture</button>
+                <a href="{{ urls.detail }}" class="btn btn-link">Annuler</a>
+            </form>
+        </div>
+    </div>
+{% endblock %}

@@ -16,6 +16,7 @@ use App\Entity\DeliveryPointTimeWindow;
 use App\Entity\DeliveryPricingZone;
 use App\Entity\DeliveryZone;
 use App\Entity\EmailLog;
+use App\Entity\FaqEntry;
 use App\Entity\HodinaSetting;
 use App\Entity\LaunchSubscriber;
 use App\Entity\OrderItem;
@@ -23,6 +24,7 @@ use App\Entity\Product;
 use App\Entity\ProductDeliveryPoint;
 use App\Entity\Seller;
 use App\Entity\SmsLog;
+use App\Entity\SupportTicket;
 use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
@@ -215,6 +217,12 @@ class DashboardController extends AbstractDashboardController
             ->setController(CourierPayoutCrudController::class);
         yield MenuItem::linkToCrud('Lignes rémunération', 'fa fa-receipt', CourierPayoutLine::class)
             ->setController(CourierPayoutLineCrudController::class);
+
+        yield MenuItem::section('Support');
+        yield MenuItem::linkToCrud('Tickets support', 'fa fa-life-ring', SupportTicket::class)
+            ->setController(SupportTicketCrudController::class);
+        yield MenuItem::linkToCrud('FAQ', 'fa fa-question-circle', FaqEntry::class)
+            ->setController(FaqEntryCrudController::class);
 
         yield MenuItem::section('Logs');
         yield MenuItem::linkToCrud('Adhésions clients', 'fas fa-user-check', CustomerSignup::class);
