@@ -160,3 +160,22 @@ Avant de proposer un commit, vérifier :
 git status
 git diff --stat
 git diff --name-status
+```
+
+## Format de livraison des commandes (local Windows / PowerShell)
+
+Quand une commande doit être lancée depuis le projet, la fournir dans un **bloc unique copiable** commençant par `cd`, une commande par ligne :
+
+```powershell
+cd D:\hodina\claude_hodina
+git pull origin <branche>
+php -d memory_limit=-1 bin/console cache:clear --no-warmup
+php -d memory_limit=-1 bin/console cache:warmup
+```
+
+Règles :
+
+- Toujours démarrer le bloc par `cd D:\hodina\claude_hodina` (chemin local du projet).
+- Après tout `git pull`, changement de code, de config ou de réglage compilé, **inclure la régénération du cache** en mode mémoire-safe : `cache:clear --no-warmup` puis `cache:warmup`. La limite PHP 128 Mo fait planter le `cache:clear` standard (OOM Twig). Noter que `cache:cache` n'existe pas.
+- Préciser le rôle de chaque commande si ce n'est pas évident.
+- Pour lancer/relancer le serveur : `symfony server:start --no-tls` (jamais `php -S … public/index.php`).

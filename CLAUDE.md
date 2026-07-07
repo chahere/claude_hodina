@@ -25,7 +25,14 @@ Ce fichier est le point d'entrée. Il complète — sans les répéter — les r
 
 - **Répondre en français.**
 - **Toujours donner les commandes avec leur contexte** : le dossier où l'exécuter + ce qu'elle fait.
-- Pour tout ce qui touche au cache Symfony, utiliser la variante mémoire-safe (voir piège n°2).
+- **Commandes en un seul bloc copiable**, commençant par `cd D:\hodina\claude_hodina`, une commande par ligne. Après un `git pull` ou tout changement de code/config/réglage compilé, **inclure la régénération du cache** en mode mémoire-safe (voir piège n°2) :
+  ```powershell
+  cd D:\hodina\claude_hodina
+  git pull origin <branche>
+  php -d memory_limit=-1 bin/console cache:clear --no-warmup
+  php -d memory_limit=-1 bin/console cache:warmup
+  ```
+- Pour tout ce qui touche au cache Symfony, utiliser la variante mémoire-safe (voir piège n°2). La commande exacte est `cache:clear --no-warmup` puis `cache:warmup` (`cache:cache` n'existe pas).
 - Diagnostiquer et **prouver contre les fichiers réels** avant de corriger. Ne pas appliquer une analyse externe (ChatGPT, etc.) sans vérifier — elle peut viser juste sur la cause mais faux sur le correctif.
 
 ## Environnement d'exécution
