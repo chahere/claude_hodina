@@ -15,5 +15,8 @@
 
 ###> symfony/asset-mapper ###
 /public/assets/
-/assets/vendor/
 ###< symfony/asset-mapper ###
+
+# assets/vendor/ reste suivi par git (exception volontaire) : le script de
+# deploiement tools/deploy-hodina-by-tag.sh n'appelle pas importmap:install,
+# donc rien d'autre ne repeuple @hotwired/stimulus et @hotwired/turbo.
