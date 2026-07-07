@@ -354,9 +354,23 @@
     })();
 
     // --- Position déplaçable (souris / tactile) ---
+
+    // window.innerWidth/innerHeight peuvent inclure une zone masquée par la
+    // barre du navigateur mobile (rétractable) : une marge calculée dessus
+    // atterrit parfois hors de la zone réellement visible (écart visuel
+    // asymétrique constaté en plein écran). visualViewport reflète la zone
+    // effectivement visible ; repli sur innerWidth/innerHeight si absent.
+    function getViewportSize() {
+        if (window.visualViewport) {
+            return { width: window.visualViewport.width, height: window.visualViewport.height };
+        }
+        return { width: window.innerWidth, height: window.innerHeight };
+    }
+
     function clampPosition(right, bottom) {
-        var maxRight = Math.max(8, window.innerWidth - toggle.offsetWidth - 8);
-        var maxBottom = Math.max(8, window.innerHeight - toggle.offsetHeight - 8);
+        var viewport = getViewportSize();
+        var maxRight = Math.max(8, viewport.width - toggle.offsetWidth - 8);
+        var maxBottom = Math.max(8, viewport.height - toggle.offsetHeight - 8);
         return {
             right: Math.min(Math.max(right, 8), maxRight),
             bottom: Math.min(Math.max(bottom, 8), maxBottom)
@@ -372,9 +386,10 @@
 
     function currentPosition() {
         var rect = toggle.getBoundingClientRect();
+        var viewport = getViewportSize();
         return {
-            right: window.innerWidth - rect.right,
-            bottom: window.innerHeight - rect.bottom
+            right: viewport.width - rect.right,
+            bottom: viewport.height - rect.bottom
         };
     }
 
@@ -414,8 +429,9 @@
     // largeur de l'écran, bornée pour ne jamais déborder. 380px sur les
     // écrans larges (identique à la valeur historique desktop).
     function getPanelWidth() {
-        var target = window.innerWidth < 720 ? 300 : 380;
-        return Math.min(target, window.innerWidth - (PANEL_MARGIN * 2));
+        var viewport = getViewportSize();
+        var target = viewport.width < 720 ? 300 : 380;
+        return Math.min(target, viewport.width - (PANEL_MARGIN * 2));
     }
 
     // Comportement unifié mobile/desktop : le panneau s'ouvre toujours
@@ -424,13 +440,14 @@
     function repositionPanelNearToggle() {
         var rect = toggle.getBoundingClientRect();
         var panelWidth = getPanelWidth();
+        var viewport = getViewportSize();
 
-        var opensToTheRight = (rect.left + panelWidth + PANEL_MARGIN) <= window.innerWidth;
+        var opensToTheRight = (rect.left + panelWidth + PANEL_MARGIN) <= viewport.width;
         var left = opensToTheRight ? rect.left : (rect.right - panelWidth);
-        left = clampNumber(left, PANEL_MARGIN, window.innerWidth - panelWidth - PANEL_MARGIN);
+        left = clampNumber(left, PANEL_MARGIN, viewport.width - panelWidth - PANEL_MARGIN);
 
         // Vertical : toujours au-dessus du bouton, borné pour rester à l'écran.
-        var bottom = clampNumber((window.innerHeight - rect.top) + 12, PANEL_MARGIN, window.innerHeight - PANEL_MAX_HEIGHT - PANEL_MARGIN);
+        var bottom = clampNumber((viewport.height - rect.top) + 12, PANEL_MARGIN, viewport.height - PANEL_MAX_HEIGHT - PANEL_MARGIN);
 
         panel.style.width = panelWidth + 'px';
         panel.style.right = 'auto';
@@ -457,10 +474,20 @@
 
         if (active) {
             var headerEl = document.querySelector('.site-header');
+            var viewport = getViewportSize();
             var topOffset = (headerEl ? headerEl.getBoundingClientRect().bottom : 0) + PANEL_MARGIN;
 
+            // Hauteur explicite ancrée par le haut plutôt que "bottom:8px" :
+            // sur mobile, position:fixed + bottom peut se résoudre par
+            // rapport à une zone plus grande que celle réellement visible
+            // (barre du navigateur rétractable), ce qui rendait l'écart du
+            // bas visuellement plus grand que celui du haut. En calculant
+            // la hauteur nous-mêmes depuis visualViewport (zone réellement
+            // visible), le bas du panneau tombe exactement à la même marge
+            // que le haut.
             panel.style.top = topOffset + 'px';
-            panel.style.bottom = PANEL_MARGIN + 'px';
+            panel.style.bottom = 'auto';
+            panel.style.height = Math.max(120, viewport.height - topOffset - PANEL_MARGIN) + 'px';
             panel.style.left = PANEL_MARGIN + 'px';
             panel.style.right = PANEL_MARGIN + 'px';
             panel.style.width = 'auto';
@@ -469,6 +496,7 @@
         } else {
             panel.style.maxWidth = '';
             panel.style.maxHeight = '';
+            panel.style.height = '';
             repositionPanelNearToggle();
         }
     }
@@ -484,7 +512,7 @@
             // Repli si la fenêtre passe en largeur desktop (le bouton
             // plein écran y est masqué) ; sinon, recalcule la hauteur
             // disponible (rotation d'écran, bannière qui change de taille).
-            setFullscreen(window.innerWidth < 720);
+            setFullscreen(getViewportSize().width < 720);
             return;
         }
 
