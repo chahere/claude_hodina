@@ -179,3 +179,13 @@ Règles :
 - Après tout `git pull`, changement de code, de config ou de réglage compilé, **inclure la régénération du cache** en mode mémoire-safe : `cache:clear --no-warmup` puis `cache:warmup`. La limite PHP 128 Mo fait planter le `cache:clear` standard (OOM Twig). Noter que `cache:cache` n'existe pas.
 - Préciser le rôle de chaque commande si ce n'est pas évident.
 - Pour lancer/relancer le serveur : `symfony server:start --no-tls` (jamais `php -S … public/index.php`).
+
+## Base de données locale : copie, dump/import, encodage, migrations
+
+Règles issues d'incidents réels (détail et commandes : `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §9-11).
+
+- **Jamais `doctrine:database:drop` ni écraser une base contenant des données.** Corriger par migration défensive ou réalignement du suivi, jamais par un reset.
+- **Copier des données entre deux bases locales (Windows) : ne jamais utiliser le `>` de PowerShell.** Il réencode la sortie en UTF-16 (import refusé : `ASCII '\0' appeared`) ou transcode les accents (`é`→`├®`, `à`→`├á`). Laisser `mariadb-dump` écrire le fichier avec `--result-file`, importer avec `cmd /c "mariadb … < fichier.sql"`, et `--default-character-set=utf8mb4` **des deux côtés**.
+- **Prouver l'encodage contre les octets réels** avant/après : `SELECT HEX(col)` — `C3A9`=`é` / `C3A0`=`à` sains ; `C383C2A9`/`C383C2A0` = double-encodage latin1 ; octet isolé (`E9`, `E0`) = colonne latin1.
+- **Après import d'un dump de prod**, `doctrine_migration_versions` est écrasée par la prod → `migrations:migrate` tente de recréer des tables existantes (`schema:validate` reste pourtant vert). Réaligner avec `doctrine:migrations:version '…\VersionXXX' --add` (ne touche que le suivi), jamais en droppant les tables du lot. Vérifier ensuite `migrations:migrate` (« Already at the latest version ») + `schema:validate`.
+- **Exécuter du SQL en local** : la commande DoctrineBundle est **`db:run-sql`** (pas `doctrine:query:sql`, inexistant → la console propose `doctrine:query:dql`, à refuser). Pour insérer de l'accentué sans le taper dans la console, l'injecter par ses octets : `CONVERT(UNHEX('C3A9') USING utf8mb4)` = `é`. Insert idempotent via `WHERE NOT EXISTS`.

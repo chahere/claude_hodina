@@ -72,6 +72,22 @@ Symptôme → cause → correctif. Détail complet dans `docs/NOTES_ENVIRONNEMEN
    php bin/console assets:install public
    ```
 
+8. **Copier une base en local sans casser les accents (dump/import)** → **jamais** le `>` de PowerShell : il réencode la sortie en UTF-16 (import refusé : `ERROR ... ASCII '\0' appeared ...`) ou transcode les accents (`é`→`├®`, `à`→`├á`). Laisser `mariadb-dump` écrire le fichier (`--result-file`, binaire) et importer avec `cmd /c` + charset explicite des **deux** côtés :
+   ```powershell
+   mariadb-dump -u root -p --single-transaction --quick --routines --triggers --events --default-character-set=utf8mb4 --result-file=..\hodina_clean.sql hodina_db
+   cmd /c "mariadb -u root -p --default-character-set=utf8mb4 claude_hodina < ..\hodina_clean.sql"
+   ```
+   Preuve en base : `SELECT HEX(col)` → `C3A0` = `à` sain, `C383C2A0` = double-encodage latin1. Détail : NOTES §9.
+
+9. **Après import d'un dump de prod, `doctrine:migrations:migrate` échoue (« Table … already exists ») mais `schema:validate` est vert** → le dump de prod a remplacé `doctrine_migration_versions` (la prod ignore le lot en cours) tandis que les tables du lot restent en place. Réaligner le suivi **sans dropper** :
+   ```powershell
+   php bin/console doctrine:migrations:list
+   php bin/console doctrine:migrations:version 'DoctrineMigrations\VersionAAAAMMJJHHMMSS' --add --no-interaction
+   ```
+   `--add` ne touche que la table de suivi. Jamais de drop pour « laisser recréer » (perte des données du lot). Les tables partagées (`hodina_setting`) étant écrasées par la prod, réinsérer les seeds perdus (piège n°10). Détail : NOTES §10.
+
+10. **Exécuter du SQL / insérer de l'accentué en local** → la commande DoctrineBundle est **`db:run-sql`** (pas `doctrine:query:sql`, inexistant). Ne pas taper l'accent dans la console (transite par l'ANSI → corrompu) ; l'injecter par ses octets UTF-8 : `CONVERT(UNHEX('C3A9') USING utf8mb4)` = `é`. Insert idempotent via `WHERE NOT EXISTS`. Détail : NOTES §11.
+
 ## Assets / CSS
 
 - Un seul CSS public : `public/css/style_mobile.css` (fond blanc, `--bg: #ffffff`).
