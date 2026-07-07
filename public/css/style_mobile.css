@@ -3999,3 +3999,312 @@ body.address-picker-open{
 .account-ajax-toast.is-warning{
   background:#92400e;
 }
+
+/* ===========================
+   Widget flottant "Assistant Hodina" (J5AE) — moteur à règles, pas d'IA
+   =========================== */
+
+.sr-only{
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hodina-chat-widget__toggle{
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2000;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  border: none;
+  background: var(--brand);
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.hodina-chat-widget__toggle:hover,
+.hodina-chat-widget__toggle:focus-visible{
+  background: var(--brand-2);
+}
+
+.hodina-chat-widget__toggle-icon{
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  border-radius: 999px;
+  background: #fff;
+  padding: 4px;
+}
+
+.hodina-chat-widget__panel{
+  position: fixed;
+  z-index: 2001;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 22px 22px 0 0;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.hodina-chat-widget__panel[hidden]{
+  display: none;
+}
+
+.hodina-chat-widget__header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .85rem 1rem;
+  background: var(--brand);
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__header-brand{
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-weight: 800;
+}
+
+.hodina-chat-widget__header-logo{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #fff;
+  padding: 2px;
+  object-fit: contain;
+}
+
+.hodina-chat-widget__close{
+  appearance: none;
+  border: none;
+  background: rgba(255,255,255,.18);
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.hodina-chat-widget__messages{
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  background: var(--card);
+  min-height: 220px;
+}
+
+.hodina-chat-widget__bubble{
+  max-width: 85%;
+  padding: .6rem .85rem;
+  border-radius: 16px;
+  font-size: .92rem;
+  line-height: 1.35;
+  box-shadow: 0 2px 6px rgba(0,0,0,.05);
+}
+
+.hodina-chat-widget__bubble p{
+  margin: 0;
+  white-space: pre-line;
+}
+
+.hodina-chat-widget__bubble--assistant{
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+.hodina-chat-widget__bubble--user{
+  align-self: flex-end;
+  background: var(--brand);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.hodina-chat-widget__bubble--typing{
+  font-style: italic;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--border);
+}
+
+.hodina-chat-widget__bubble-action{
+  display: inline-block;
+  margin-top: .5rem;
+  font-weight: 700;
+  color: var(--brand-2);
+  text-decoration: underline;
+}
+
+.hodina-chat-widget__quick-replies{
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding: 0 1rem .75rem;
+  background: var(--card);
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__quick-reply{
+  appearance: none;
+  border: 1px solid var(--brand);
+  color: var(--brand-2);
+  background: #fff;
+  border-radius: 999px;
+  padding: .4rem .75rem;
+  font-size: .82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hodina-chat-widget__quick-reply:hover{
+  background: var(--brand);
+  color: #fff;
+}
+
+.hodina-chat-widget__escalate{
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  padding: .85rem 1rem;
+  border-top: 1px solid var(--border);
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__escalate-intro{
+  margin: 0;
+  font-size: .85rem;
+  color: var(--muted);
+}
+
+.hodina-chat-widget__escalate input,
+.hodina-chat-widget__escalate textarea{
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: .55rem .7rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.hodina-chat-widget__escalate textarea{
+  min-height: 70px;
+  resize: vertical;
+}
+
+.hodina-chat-widget__honeypot{
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.hodina-chat-widget__form-error{
+  margin: 0;
+  color: #991b1b;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.hodina-chat-widget__escalate-actions{
+  display: flex;
+  gap: .5rem;
+}
+
+.hodina-chat-widget__btn{
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  border-radius: 999px;
+  padding: .5rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hodina-chat-widget__btn--primary{
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+.hodina-chat-widget__composer{
+  display: flex;
+  gap: .5rem;
+  padding: .75rem;
+  border-top: 1px solid var(--border);
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__composer input{
+  flex: 1 1 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: .6rem 1rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.hodina-chat-widget__send{
+  appearance: none;
+  border: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__send:hover{
+  background: var(--brand-2);
+}
+
+@media (min-width: 720px){
+  .hodina-chat-widget__toggle{
+    right: 24px;
+    bottom: 24px;
+  }
+
+  .hodina-chat-widget__panel{
+    left: auto;
+    right: 24px;
+    bottom: 96px;
+    width: 380px;
+    max-height: 560px;
+    border-radius: 20px;
+  }
+}

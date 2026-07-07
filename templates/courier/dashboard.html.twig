@@ -2,6 +2,9 @@
 
 {% block title %}Dashboard livreur — Hodina{% endblock %}
 
+{# Portail livreur : widget assistant client hors périmètre, on le masque. #}
+{% block chat_widget %}{% endblock %}
+
 {% block body %}
     {% macro alert_badges(alerts) %}
         {% if alerts is not empty %}

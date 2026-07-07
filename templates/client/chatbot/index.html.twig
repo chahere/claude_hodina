@@ -2,6 +2,9 @@
 
 {% block title %}Assistant Hodina – Mon compte{% endblock %}
 
+{# Page dédiée au chatbot IA (Temps 2/3) : on masque le widget flottant pour éviter deux chats à l'écran. #}
+{% block chat_widget %}{% endblock %}
+
 {% block stylesheets %}
     {{ parent() }}
     <style>

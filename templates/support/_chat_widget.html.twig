@@ -1,0 +1,392 @@
+{#
+    Widget flottant "Assistant Hodina" (moteur à règles, aucune IA).
+    Inclus une seule fois via base.html.twig (bloc chat_widget), donc visible
+    sur tout le site public : catalogue, fiche produit, panier, checkout,
+    contact, espace client. Masqué explicitement sur /mon-compte/assistant
+    (chatbot IA plein écran, J5AD) et /djama (portail livreur).
+#}
+<div class="hodina-chat-widget"
+     data-chat-widget
+     data-message-url="{{ path('support_widget_message') }}"
+     data-escalate-url="{{ path('support_widget_escalate') }}"
+     data-token-message="{{ csrf_token('widget_chat_message') }}"
+     data-token-escalate="{{ csrf_token('widget_chat_escalate') }}"
+     data-connected="{{ app.user ? '1' : '0' }}">
+
+    <button type="button"
+            class="hodina-chat-widget__toggle"
+            data-chat-widget-toggle
+            aria-expanded="false"
+            aria-controls="hodina-chat-widget-panel"
+            aria-label="Ouvrir l’assistant Hodina">
+        <img src="{{ asset('images/logo_hodina_mobile.png') }}" alt="" class="hodina-chat-widget__toggle-icon">
+    </button>
+
+    <section id="hodina-chat-widget-panel"
+             class="hodina-chat-widget__panel"
+             data-chat-widget-panel
+             hidden
+             role="dialog"
+             aria-label="Assistant Hodina">
+        <header class="hodina-chat-widget__header">
+            <div class="hodina-chat-widget__header-brand">
+                <img src="{{ asset('images/logo_hodina_mobile.png') }}" alt="" class="hodina-chat-widget__header-logo">
+                <span>Assistant Hodina</span>
+            </div>
+            <button type="button" class="hodina-chat-widget__close" data-chat-widget-close aria-label="Fermer l’assistant">✕</button>
+        </header>
+
+        <div class="hodina-chat-widget__messages" data-chat-widget-messages aria-live="polite"></div>
+
+        <div class="hodina-chat-widget__quick-replies" data-chat-widget-quick-replies hidden></div>
+
+        <form class="hodina-chat-widget__escalate" data-chat-widget-escalate-form hidden>
+            <p class="hodina-chat-widget__escalate-intro">Laissez-nous vos coordonnées, l’équipe Hodina vous répond rapidement.</p>
+
+            <input type="text" name="website" class="hodina-chat-widget__honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+            {% if not app.user %}
+                <label class="sr-only" for="hodina-chat-widget-name">Nom</label>
+                <input type="text" id="hodina-chat-widget-name" name="name" placeholder="Votre nom" data-chat-widget-field="name" required>
+
+                <label class="sr-only" for="hodina-chat-widget-email">E-mail</label>
+                <input type="email" id="hodina-chat-widget-email" name="email" placeholder="Votre e-mail" data-chat-widget-field="email">
+
+                <label class="sr-only" for="hodina-chat-widget-phone">Téléphone</label>
+                <input type="tel" id="hodina-chat-widget-phone" name="phone" placeholder="Votre téléphone (si pas d’e-mail)" data-chat-widget-field="phone">
+            {% endif %}
+
+            <label class="sr-only" for="hodina-chat-widget-escalate-message">Votre demande</label>
+            <textarea id="hodina-chat-widget-escalate-message" name="message" placeholder="Décrivez votre demande…" data-chat-widget-field="message" required></textarea>
+
+            <p class="hodina-chat-widget__form-error" data-chat-widget-escalate-error hidden></p>
+
+            <div class="hodina-chat-widget__escalate-actions">
+                <button type="submit" class="hodina-chat-widget__btn hodina-chat-widget__btn--primary">Envoyer à l’équipe</button>
+                <button type="button" class="hodina-chat-widget__btn" data-chat-widget-cancel-escalate>Annuler</button>
+            </div>
+        </form>
+
+        <form class="hodina-chat-widget__composer" data-chat-widget-composer>
+            <label class="sr-only" for="hodina-chat-widget-input">Tapez votre question</label>
+            <input type="text"
+                   id="hodina-chat-widget-input"
+                   name="message"
+                   placeholder="Tapez votre question…"
+                   autocomplete="off"
+                   maxlength="2000"
+                   data-chat-widget-input>
+            <button type="submit" class="hodina-chat-widget__send" aria-label="Envoyer">➤</button>
+        </form>
+    </section>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var root = document.querySelector('[data-chat-widget]');
+    if (!root) {
+        return;
+    }
+
+    var toggle = root.querySelector('[data-chat-widget-toggle]');
+    var panel = root.querySelector('[data-chat-widget-panel]');
+    var closeBtn = root.querySelector('[data-chat-widget-close]');
+    var messagesEl = root.querySelector('[data-chat-widget-messages]');
+    var quickRepliesEl = root.querySelector('[data-chat-widget-quick-replies]');
+    var composer = root.querySelector('[data-chat-widget-composer]');
+    var input = root.querySelector('[data-chat-widget-input]');
+    var escalateForm = root.querySelector('[data-chat-widget-escalate-form]');
+    var escalateError = root.querySelector('[data-chat-widget-escalate-error]');
+    var cancelEscalateBtn = root.querySelector('[data-chat-widget-cancel-escalate]');
+
+    if (!toggle || !panel || !messagesEl || !composer || !input || !escalateForm) {
+        return;
+    }
+
+    var messageUrl = root.getAttribute('data-message-url');
+    var escalateUrl = root.getAttribute('data-escalate-url');
+    var tokenMessage = root.getAttribute('data-token-message');
+    var tokenEscalate = root.getAttribute('data-token-escalate');
+
+    var STORAGE_KEY = 'hodina_widget_state_v1';
+    var DEFAULT_QUICK_REPLIES = ['Frais de livraison', 'Où est ma commande ?', 'Produits disponibles', 'Parler à l’équipe'];
+    var WELCOME_TEXT = 'Bonjour 👋 Je suis l’assistant Hodina. Je peux vous aider sur les commandes, la livraison, les produits ou vous mettre en contact avec l’équipe.';
+
+    var state = loadState();
+
+    function loadState() {
+        try {
+            var raw = window.sessionStorage.getItem(STORAGE_KEY);
+            if (!raw) {
+                return { open: false, log: [], recentExchange: [] };
+            }
+            var parsed = JSON.parse(raw);
+            return {
+                open: !!parsed.open,
+                log: Array.isArray(parsed.log) ? parsed.log : [],
+                recentExchange: Array.isArray(parsed.recentExchange) ? parsed.recentExchange : []
+            };
+        } catch (e) {
+            return { open: false, log: [], recentExchange: [] };
+        }
+    }
+
+    function saveState() {
+        try {
+            window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) { /* stockage indisponible : on continue sans persistance */ }
+    }
+
+    function appendBubble(role, text, options) {
+        options = options || {};
+        var bubble = document.createElement('div');
+        bubble.className = 'hodina-chat-widget__bubble hodina-chat-widget__bubble--' + role;
+
+        var textEl = document.createElement('p');
+        textEl.textContent = text;
+        bubble.appendChild(textEl);
+
+        if (options.action && options.action.url && options.action.label) {
+            var link = document.createElement('a');
+            link.href = options.action.url;
+            link.className = 'hodina-chat-widget__bubble-action';
+            link.textContent = options.action.label;
+            bubble.appendChild(link);
+        }
+
+        if (options.messengerUrl) {
+            var messengerLink = document.createElement('a');
+            messengerLink.href = options.messengerUrl;
+            messengerLink.target = '_blank';
+            messengerLink.rel = 'noopener';
+            messengerLink.className = 'hodina-chat-widget__bubble-action';
+            messengerLink.textContent = 'Continuer sur Messenger';
+            bubble.appendChild(messengerLink);
+        }
+
+        messagesEl.appendChild(bubble);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+
+        return bubble;
+    }
+
+    function renderLog() {
+        messagesEl.innerHTML = '';
+        state.log.forEach(function (entry) {
+            appendBubble(entry.role, entry.text, { action: entry.action, messengerUrl: entry.messengerUrl });
+        });
+    }
+
+    function pushLog(role, text, extra) {
+        var entry = { role: role, text: text };
+        if (extra && extra.action) { entry.action = extra.action; }
+        if (extra && extra.messengerUrl) { entry.messengerUrl = extra.messengerUrl; }
+        state.log.push(entry);
+        saveState();
+    }
+
+    function setQuickReplies(labels) {
+        quickRepliesEl.innerHTML = '';
+        if (!labels || !labels.length) {
+            quickRepliesEl.hidden = true;
+            return;
+        }
+        labels.forEach(function (label) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'hodina-chat-widget__quick-reply';
+            btn.textContent = label;
+            btn.addEventListener('click', function () { sendMessage(label); });
+            quickRepliesEl.appendChild(btn);
+        });
+        quickRepliesEl.hidden = false;
+    }
+
+    function showTyping() {
+        var bubble = document.createElement('div');
+        bubble.className = 'hodina-chat-widget__bubble hodina-chat-widget__bubble--assistant hodina-chat-widget__bubble--typing';
+        bubble.setAttribute('data-chat-widget-typing', '');
+        bubble.textContent = 'Hodina écrit…';
+        messagesEl.appendChild(bubble);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return bubble;
+    }
+
+    function openPanel() {
+        panel.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+        state.open = true;
+        saveState();
+
+        if (state.log.length === 0) {
+            appendBubble('assistant', WELCOME_TEXT);
+            pushLog('assistant', WELCOME_TEXT);
+            setQuickReplies(DEFAULT_QUICK_REPLIES);
+        }
+
+        window.setTimeout(function () { input.focus(); }, 50);
+    }
+
+    function closePanel() {
+        panel.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+        state.open = false;
+        saveState();
+    }
+
+    function sendMessage(text) {
+        text = (text || '').trim();
+        if (!text) { return; }
+
+        appendBubble('user', text);
+        pushLog('user', text);
+        state.recentExchange.push({ role: 'user', text: text });
+        state.recentExchange = state.recentExchange.slice(-10);
+        saveState();
+
+        setQuickReplies(null);
+        var typingBubble = showTyping();
+        input.value = '';
+        input.disabled = true;
+
+        fetch(messageUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ message: text, _token: tokenMessage })
+        })
+            .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+            .then(function (result) {
+                typingBubble.remove();
+                input.disabled = false;
+                input.focus();
+
+                if (!result.ok || !result.data || !result.data.reply) {
+                    var errorText = 'Désolé, une erreur est survenue. Vous pouvez réessayer ou contacter directement l’équipe.';
+                    appendBubble('assistant', errorText);
+                    pushLog('assistant', errorText);
+                    revealEscalateForm(text);
+                    return;
+                }
+
+                var reply = result.data.reply;
+                appendBubble('assistant', reply.text, { action: reply.action });
+                pushLog('assistant', reply.text, { action: reply.action });
+                state.recentExchange.push({ role: 'assistant', text: reply.text });
+                state.recentExchange = state.recentExchange.slice(-10);
+                saveState();
+
+                setQuickReplies(reply.quickReplies && reply.quickReplies.length ? reply.quickReplies : null);
+
+                if (reply.suggestEscalation) {
+                    revealEscalateForm(text);
+                }
+            })
+            .catch(function () {
+                typingBubble.remove();
+                input.disabled = false;
+                var errorText = 'Désolé, une erreur réseau est survenue. Vous pouvez réessayer ou contacter directement l’équipe.';
+                appendBubble('assistant', errorText);
+                pushLog('assistant', errorText);
+                revealEscalateForm(text);
+            });
+    }
+
+    function revealEscalateForm(prefillMessage) {
+        escalateForm.hidden = false;
+        escalateError.hidden = true;
+        var messageField = escalateForm.querySelector('[data-chat-widget-field="message"]');
+        if (messageField && !messageField.value) {
+            messageField.value = prefillMessage || '';
+        }
+        window.setTimeout(function () { escalateForm.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 50);
+    }
+
+    toggle.addEventListener('click', function () {
+        if (panel.hidden) { openPanel(); } else { closePanel(); }
+    });
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closePanel);
+    }
+
+    composer.addEventListener('submit', function (event) {
+        event.preventDefault();
+        sendMessage(input.value);
+    });
+
+    if (cancelEscalateBtn) {
+        cancelEscalateBtn.addEventListener('click', function () {
+            escalateForm.hidden = true;
+        });
+    }
+
+    escalateForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        var messageField = escalateForm.querySelector('[data-chat-widget-field="message"]');
+        var nameField = escalateForm.querySelector('[data-chat-widget-field="name"]');
+        var emailField = escalateForm.querySelector('[data-chat-widget-field="email"]');
+        var phoneField = escalateForm.querySelector('[data-chat-widget-field="phone"]');
+        var honeypotField = escalateForm.querySelector('input[name="website"]');
+
+        var payload = {
+            message: messageField ? messageField.value : '',
+            name: nameField ? nameField.value : '',
+            email: emailField ? emailField.value : '',
+            phone: phoneField ? phoneField.value : '',
+            website: honeypotField ? honeypotField.value : '',
+            recentExchange: state.recentExchange,
+            _token: tokenEscalate
+        };
+
+        var submitBtn = escalateForm.querySelector('button[type="submit"]');
+        if (submitBtn) { submitBtn.disabled = true; }
+        escalateError.hidden = true;
+
+        fetch(escalateUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+            .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+            .then(function (result) {
+                if (submitBtn) { submitBtn.disabled = false; }
+
+                if (!result.ok || !result.data || result.data.ok !== true) {
+                    escalateError.textContent = (result.data && result.data.error) || 'Impossible d’envoyer votre demande pour le moment.';
+                    escalateError.hidden = false;
+                    return;
+                }
+
+                escalateForm.hidden = true;
+                escalateForm.reset();
+
+                var confirmationText = 'Merci, votre demande a été transmise à l’équipe Hodina. Nous vous répondrons rapidement.';
+                appendBubble('assistant', confirmationText, { messengerUrl: result.data.messengerUrl || null });
+                pushLog('assistant', confirmationText, { messengerUrl: result.data.messengerUrl || null });
+            })
+            .catch(function () {
+                if (submitBtn) { submitBtn.disabled = false; }
+                escalateError.textContent = 'Erreur réseau. Réessayez dans un instant.';
+                escalateError.hidden = false;
+            });
+    });
+
+    if (state.log.length > 0) {
+        renderLog();
+        var last = state.log[state.log.length - 1];
+        if (last && last.role === 'assistant') {
+            setQuickReplies(DEFAULT_QUICK_REPLIES);
+        }
+    }
+
+    if (state.open) {
+        panel.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+    }
+})();
+</script>
