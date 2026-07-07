@@ -4069,6 +4069,13 @@ body.address-picker-open{
   right: 0;
   bottom: 0;
   max-height: 78vh;
+  /* iOS Safari calcule "vh" sur la plus grande hauteur possible (barre
+     d'adresse rétractée), pas sur la hauteur réellement visible : le
+     panneau semblait bien plus grand que l'écran utile. "dvh" (hauteur de
+     viewport dynamique) suit la zone réellement visible ; ignorée sans
+     casse par les navigateurs qui ne la supportent pas (le vh ci-dessus
+     reste alors la valeur appliquée). */
+  max-height: 78dvh;
   display: flex;
   flex-direction: column;
   background: var(--bg);

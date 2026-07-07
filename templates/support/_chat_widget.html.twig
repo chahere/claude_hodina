@@ -230,12 +230,20 @@
         return bubble;
     }
 
+    // Sur desktop, le bouton reste visible même panneau ouvert (au-dessus en
+    // z-index) : on peut le recliquer pour fermer, ou le glisser pour
+    // repositionner le panneau en direct (cf. pointermove plus bas). Sur
+    // mobile, le panneau occupe la quasi-totalité de l'écran indépendamment
+    // du bouton (bottom sheet plein écran) : le laisser visible ne ferait
+    // que le faire flotter par-dessus le contenu du panneau, sans utilité.
+    function syncToggleVisibility() {
+        toggle.hidden = !panel.hidden && isMobileLayout();
+    }
+
     function openPanel() {
         repositionPanelNearToggle();
         panel.hidden = false;
-        // Le bouton reste visible (cf. z-index en CSS, toujours au-dessus du
-        // panneau) : on peut le recliquer pour fermer, ou le glisser pour
-        // repositionner le panneau en direct (cf. pointermove plus bas).
+        syncToggleVisibility();
         toggle.setAttribute('aria-expanded', 'true');
         state.open = true;
         saveState();
@@ -251,6 +259,7 @@
 
     function closePanel() {
         panel.hidden = true;
+        syncToggleVisibility();
         toggle.setAttribute('aria-expanded', 'false');
         state.open = false;
         saveState();
@@ -436,9 +445,15 @@
     }
 
     window.addEventListener('resize', function () {
-        var pos = currentPosition();
-        var clamped = clampPosition(pos.right, pos.bottom);
-        applyPosition(clamped.right, clamped.bottom);
+        // Recalculer d'abord la visibilité (un redimensionnement peut faire
+        // franchir le seuil mobile/desktop pendant que le panneau est ouvert).
+        syncToggleVisibility();
+
+        if (!toggle.hidden) {
+            var pos = currentPosition();
+            var clamped = clampPosition(pos.right, pos.bottom);
+            applyPosition(clamped.right, clamped.bottom);
+        }
 
         if (!panel.hidden) {
             repositionPanelNearToggle();
@@ -590,6 +605,7 @@
     if (state.open) {
         repositionPanelNearToggle();
         panel.hidden = false;
+        syncToggleVisibility();
         toggle.setAttribute('aria-expanded', 'true');
     }
 })();
