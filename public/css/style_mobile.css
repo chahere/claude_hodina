@@ -4019,7 +4019,7 @@ body.address-picker-open{
 .hodina-chat-widget__toggle{
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  bottom: 96px;
   z-index: 2000;
   width: 60px;
   height: 60px;
@@ -4030,13 +4030,21 @@ body.address-picker-open{
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
+  cursor: grab;
   padding: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .hodina-chat-widget__toggle:hover,
 .hodina-chat-widget__toggle:focus-visible{
   background: var(--brand-2);
+}
+
+.hodina-chat-widget__toggle.is-dragging{
+  cursor: grabbing;
+  box-shadow: 0 16px 32px rgba(0,0,0,.22);
 }
 
 .hodina-chat-widget__toggle-icon{
@@ -4296,13 +4304,13 @@ body.address-picker-open{
 @media (min-width: 720px){
   .hodina-chat-widget__toggle{
     right: 24px;
-    bottom: 24px;
+    bottom: 32px;
   }
 
   .hodina-chat-widget__panel{
     left: auto;
     right: 24px;
-    bottom: 96px;
+    bottom: 104px;
     width: 380px;
     max-height: 560px;
     border-radius: 20px;

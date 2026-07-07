@@ -11,15 +11,24 @@
      data-escalate-url="{{ path('support_widget_escalate') }}"
      data-token-message="{{ csrf_token('widget_chat_message') }}"
      data-token-escalate="{{ csrf_token('widget_chat_escalate') }}"
-     data-connected="{{ app.user ? '1' : '0' }}">
+     data-connected="{{ app.user ? '1' : '0' }}"
+     {#
+        Frames de l'animation du bouton flottant (illusion de mouvement).
+        En attente des 4 visuels hippocampe fournis : les 4 entrées pointent
+        pour l'instant vers le même logo (on ne prétend jamais qu'une image
+        existe sans l'avoir vérifiée). Dès que les fichiers réels seront
+        déposés dans public/images/assistant/, remplacer ces 4 chemins :
+        l'animation se déclenche automatiquement dès que les URLs diffèrent.
+     #}
+     data-frames="{{ [asset('images/logo_hodina_mobile.png'), asset('images/logo_hodina_mobile.png'), asset('images/logo_hodina_mobile.png'), asset('images/logo_hodina_mobile.png')]|json_encode }}">
 
     <button type="button"
             class="hodina-chat-widget__toggle"
             data-chat-widget-toggle
             aria-expanded="false"
             aria-controls="hodina-chat-widget-panel"
-            aria-label="Ouvrir l’assistant Hodina">
-        <img src="{{ asset('images/logo_hodina_mobile.png') }}" alt="" class="hodina-chat-widget__toggle-icon">
+            aria-label="Ouvrir ou déplacer l’assistant Hodina">
+        <img src="{{ asset('images/logo_hodina_mobile.png') }}" alt="" class="hodina-chat-widget__toggle-icon" data-chat-widget-frame>
     </button>
 
     <section id="hodina-chat-widget-panel"
@@ -111,8 +120,17 @@
     var tokenEscalate = root.getAttribute('data-token-escalate');
 
     var STORAGE_KEY = 'hodina_widget_state_v1';
+    var POSITION_STORAGE_KEY = 'hodina_widget_position_v1';
+    var DRAG_THRESHOLD_PX = 6;
+    var FRAME_INTERVAL_MS = 550;
     var DEFAULT_QUICK_REPLIES = ['Frais de livraison', 'Où est ma commande ?', 'Produits disponibles', 'Parler à l’équipe'];
     var WELCOME_TEXT = 'Bonjour 👋 Je suis l’assistant Hodina. Je peux vous aider sur les commandes, la livraison, les produits ou vous mettre en contact avec l’équipe.';
+
+    var frameImg = toggle.querySelector('[data-chat-widget-frame]');
+    var frames = [];
+    try {
+        frames = JSON.parse(root.getAttribute('data-frames') || '[]');
+    } catch (e) { frames = []; }
 
     var state = loadState();
 
@@ -216,6 +234,7 @@
 
     function openPanel() {
         panel.hidden = false;
+        repositionPanelNearToggle();
         toggle.setAttribute('aria-expanded', 'true');
         state.open = true;
         saveState();
@@ -304,9 +323,161 @@
         window.setTimeout(function () { escalateForm.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 50);
     }
 
-    toggle.addEventListener('click', function () {
-        if (panel.hidden) { openPanel(); } else { closePanel(); }
+    function isMobileLayout() {
+        return window.matchMedia('(max-width: 719px)').matches;
+    }
+
+    // --- Animation "sprite" (illusion de mouvement) ---
+    // Ne démarre que si les frames sont réellement différentes : tant que ce
+    // sont des placeholders identiques (cf. commentaire Twig ci-dessus), la
+    // boucle ne se lance pas. Dès que les vrais visuels seront fournis,
+    // l'animation s'active automatiquement, sans autre changement de code.
+    (function initFrameAnimation() {
+        if (!frameImg || frames.length < 2 || new Set(frames).size < 2) {
+            return;
+        }
+        var index = 0;
+        window.setInterval(function () {
+            index = (index + 1) % frames.length;
+            frameImg.src = frames[index];
+        }, FRAME_INTERVAL_MS);
+    })();
+
+    // --- Position déplaçable (souris / tactile) ---
+    function clampPosition(right, bottom) {
+        var maxRight = Math.max(8, window.innerWidth - toggle.offsetWidth - 8);
+        var maxBottom = Math.max(8, window.innerHeight - toggle.offsetHeight - 8);
+        return {
+            right: Math.min(Math.max(right, 8), maxRight),
+            bottom: Math.min(Math.max(bottom, 8), maxBottom)
+        };
+    }
+
+    function applyPosition(right, bottom) {
+        toggle.style.left = 'auto';
+        toggle.style.top = 'auto';
+        toggle.style.right = right + 'px';
+        toggle.style.bottom = bottom + 'px';
+    }
+
+    function currentPosition() {
+        var rect = toggle.getBoundingClientRect();
+        return {
+            right: window.innerWidth - rect.right,
+            bottom: window.innerHeight - rect.bottom
+        };
+    }
+
+    function loadPosition() {
+        try {
+            var raw = window.localStorage.getItem(POSITION_STORAGE_KEY);
+            if (!raw) { return null; }
+            var parsed = JSON.parse(raw);
+            if (typeof parsed.right === 'number' && typeof parsed.bottom === 'number') {
+                return parsed;
+            }
+        } catch (e) { /* ignore */ }
+        return null;
+    }
+
+    function savePosition(position) {
+        try {
+            window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position));
+        } catch (e) { /* stockage indisponible : la position ne sera pas retenue */ }
+    }
+
+    var storedPosition = loadPosition();
+    if (storedPosition) {
+        var initialClamped = clampPosition(storedPosition.right, storedPosition.bottom);
+        applyPosition(initialClamped.right, initialClamped.bottom);
+    }
+
+    function repositionPanelNearToggle() {
+        if (isMobileLayout()) {
+            // Mobile : le panneau reste ancré en bas pleine largeur (spec
+            // UX mobile-first), indépendant de la position du bouton.
+            panel.style.right = '';
+            panel.style.bottom = '';
+            panel.style.left = '';
+            panel.style.top = '';
+            return;
+        }
+
+        var pos = currentPosition();
+        var panelWidth = panel.offsetWidth || 380;
+        var panelHeight = panel.offsetHeight || 520;
+        var right = Math.min(Math.max(pos.right, 8), Math.max(8, window.innerWidth - panelWidth - 8));
+        var bottom = Math.min(pos.bottom + toggle.offsetHeight + 12, Math.max(8, window.innerHeight - panelHeight - 8));
+
+        panel.style.left = 'auto';
+        panel.style.top = 'auto';
+        panel.style.right = right + 'px';
+        panel.style.bottom = bottom + 'px';
+    }
+
+    window.addEventListener('resize', function () {
+        var pos = currentPosition();
+        var clamped = clampPosition(pos.right, pos.bottom);
+        applyPosition(clamped.right, clamped.bottom);
+
+        if (!panel.hidden) {
+            repositionPanelNearToggle();
+        }
     });
+
+    var dragState = null;
+
+    toggle.addEventListener('pointerdown', function (event) {
+        if (event.button !== undefined && event.button !== 0) { return; }
+
+        var start = currentPosition();
+        dragState = {
+            pointerId: event.pointerId,
+            startClientX: event.clientX,
+            startClientY: event.clientY,
+            startRight: start.right,
+            startBottom: start.bottom,
+            moved: false
+        };
+        toggle.setPointerCapture(event.pointerId);
+    });
+
+    toggle.addEventListener('pointermove', function (event) {
+        if (!dragState || dragState.pointerId !== event.pointerId) { return; }
+
+        var deltaX = event.clientX - dragState.startClientX;
+        var deltaY = event.clientY - dragState.startClientY;
+
+        if (!dragState.moved && Math.abs(deltaX) < DRAG_THRESHOLD_PX && Math.abs(deltaY) < DRAG_THRESHOLD_PX) {
+            return;
+        }
+
+        if (!dragState.moved) {
+            dragState.moved = true;
+            toggle.classList.add('is-dragging');
+        }
+
+        var next = clampPosition(dragState.startRight - deltaX, dragState.startBottom - deltaY);
+        applyPosition(next.right, next.bottom);
+    });
+
+    function endDrag(event) {
+        if (!dragState || dragState.pointerId !== event.pointerId) { return; }
+
+        var wasDrag = dragState.moved;
+        toggle.classList.remove('is-dragging');
+        dragState = null;
+
+        if (wasDrag) {
+            savePosition(currentPosition());
+            return;
+        }
+
+        if (panel.hidden) { openPanel(); } else { closePanel(); }
+    }
+
+    toggle.addEventListener('pointerup', endDrag);
+    toggle.addEventListener('pointercancel', endDrag);
 
     if (closeBtn) {
         closeBtn.addEventListener('click', closePanel);
@@ -386,6 +557,7 @@
 
     if (state.open) {
         panel.hidden = false;
+        repositionPanelNearToggle();
         toggle.setAttribute('aria-expanded', 'true');
     }
 })();
