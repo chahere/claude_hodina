@@ -4134,7 +4134,15 @@ body.address-picker-open{
   object-fit: contain;
 }
 
-.hodina-chat-widget__close{
+.hodina-chat-widget__header-actions{
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__close,
+.hodina-chat-widget__maximize{
   appearance: none;
   border: none;
   background: rgba(255,255,255,.18);
@@ -4145,6 +4153,25 @@ body.address-picker-open{
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__maximize-icon{
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+}
+
+/* Agrandissement plein écran : mobile uniquement (le panneau desktop est
+   déjà une petite fenêtre, l'agrandir n'a pas de sens). */
+@media (min-width: 720px){
+  .hodina-chat-widget__maximize{
+    display: none;
+  }
 }
 
 .hodina-chat-widget__messages{

@@ -40,7 +40,13 @@
                 <img src="{{ asset('images/assistant/assistant_hodina_1.png') }}" alt="" class="hodina-chat-widget__header-logo">
                 <span>Assistant Hodina</span>
             </div>
-            <button type="button" class="hodina-chat-widget__close" data-chat-widget-close aria-label="Fermer l’assistant">✕</button>
+            <div class="hodina-chat-widget__header-actions">
+                {# Mobile uniquement (masqué en CSS dès 720px) : agrandit le panneau du bas de la bannière jusqu'au-dessus du footer. #}
+                <button type="button" class="hodina-chat-widget__maximize" data-chat-widget-maximize aria-label="Agrandir la conversation" aria-pressed="false">
+                    <span class="hodina-chat-widget__maximize-icon" aria-hidden="true"></span>
+                </button>
+                <button type="button" class="hodina-chat-widget__close" data-chat-widget-close aria-label="Fermer l’assistant">✕</button>
+            </div>
         </header>
 
         <div class="hodina-chat-widget__messages" data-chat-widget-messages aria-live="polite"></div>
@@ -107,6 +113,7 @@
     var escalateForm = root.querySelector('[data-chat-widget-escalate-form]');
     var escalateError = root.querySelector('[data-chat-widget-escalate-error]');
     var cancelEscalateBtn = root.querySelector('[data-chat-widget-cancel-escalate]');
+    var maximizeBtn = root.querySelector('[data-chat-widget-maximize]');
 
     if (!toggle || !panel || !messagesEl || !composer || !input || !escalateForm) {
         return;
@@ -256,6 +263,10 @@
         toggle.setAttribute('aria-expanded', 'false');
         state.open = false;
         saveState();
+
+        if (isFullscreen) {
+            setFullscreen(false);
+        }
     }
 
     function sendMessage(text) {
@@ -428,7 +439,55 @@
         panel.style.bottom = bottom + 'px';
     }
 
+    // --- Plein écran (mobile uniquement) ---
+    // Le panneau s'étend du bas de la bannière du site (.site-header, sticky
+    // en haut) jusqu'à une marge du bas de l'écran. Bouton masqué en CSS dès
+    // 720px : cette fonction n'est de toute façon appelable que via un clic
+    // sur ce bouton, invisible sur desktop.
+    var isFullscreen = false;
+
+    function setFullscreen(active) {
+        isFullscreen = active;
+        toggle.hidden = active;
+
+        if (maximizeBtn) {
+            maximizeBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            maximizeBtn.setAttribute('aria-label', active ? 'Réduire la conversation' : 'Agrandir la conversation');
+        }
+
+        if (active) {
+            var headerEl = document.querySelector('.site-header');
+            var topOffset = (headerEl ? headerEl.getBoundingClientRect().bottom : 0) + PANEL_MARGIN;
+
+            panel.style.top = topOffset + 'px';
+            panel.style.bottom = PANEL_MARGIN + 'px';
+            panel.style.left = PANEL_MARGIN + 'px';
+            panel.style.right = PANEL_MARGIN + 'px';
+            panel.style.width = 'auto';
+            panel.style.maxWidth = 'none';
+            panel.style.maxHeight = 'none';
+        } else {
+            panel.style.maxWidth = '';
+            panel.style.maxHeight = '';
+            repositionPanelNearToggle();
+        }
+    }
+
+    if (maximizeBtn) {
+        maximizeBtn.addEventListener('click', function () {
+            setFullscreen(!isFullscreen);
+        });
+    }
+
     window.addEventListener('resize', function () {
+        if (isFullscreen) {
+            // Repli si la fenêtre passe en largeur desktop (le bouton
+            // plein écran y est masqué) ; sinon, recalcule la hauteur
+            // disponible (rotation d'écran, bannière qui change de taille).
+            setFullscreen(window.innerWidth < 720);
+            return;
+        }
+
         var pos = currentPosition();
         var clamped = clampPosition(pos.right, pos.bottom);
         applyPosition(clamped.right, clamped.bottom);
