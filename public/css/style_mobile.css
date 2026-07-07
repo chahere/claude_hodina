@@ -4073,7 +4073,12 @@ body.address-picker-open{
   border: 1px solid var(--border);
   border-radius: 22px 22px 0 0;
   box-shadow: var(--shadow);
-  overflow: hidden;
+  /* Filet de sécurité : si le contenu (formulaire d'escalade + suggestions +
+     messages) dépasse malgré tout max-height, on scrolle DANS le panneau
+     plutôt que de laisser la boîte s'étendre hors de sa position (le header
+     et sa croix de fermeture doivent toujours rester atteignables). */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .hodina-chat-widget__panel[hidden]{
@@ -4089,6 +4094,11 @@ body.address-picker-open{
   background: var(--brand);
   color: #fff;
   flex: 0 0 auto;
+  /* Reste toujours visible (donc la croix de fermeture toujours cliquable)
+     même si le panneau doit défiler en interne (cf. .hodina-chat-widget__panel). */
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .hodina-chat-widget__header-brand{
@@ -4128,7 +4138,11 @@ body.address-picker-open{
   flex-direction: column;
   gap: .6rem;
   background: var(--card);
-  min-height: 220px;
+  /* Volontairement bas : avec le formulaire d'escalade ET les suggestions
+     rapides visibles en même temps que les messages, un min-height élevé
+     forçait le panneau entier à dépasser sa max-height (le header pouvait
+     alors sortir de l'écran). Cette zone a sa propre barre de défilement. */
+  min-height: 72px;
 }
 
 .hodina-chat-widget__bubble{
