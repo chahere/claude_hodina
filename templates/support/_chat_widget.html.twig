@@ -411,6 +411,8 @@
         return Math.min(Math.max(value, min), max);
     }
 
+    var PANEL_MARGIN = 8;
+
     function repositionPanelNearToggle() {
         if (isMobileLayout()) {
             // Mobile : le panneau reste ancré en bas pleine largeur (spec
@@ -422,24 +424,31 @@
             return;
         }
 
-        var pos = currentPosition();
-        var right = clampNumber(pos.right, 8, window.innerWidth - PANEL_WIDTH - 8);
-        var bottom = clampNumber(pos.bottom + toggle.offsetHeight + 12, 8, window.innerHeight - PANEL_MAX_HEIGHT - 8);
+        var rect = toggle.getBoundingClientRect();
 
-        panel.style.left = 'auto';
+        // Horizontal : ouvrir à droite du bouton par défaut ; s'il n'y a pas
+        // la place (bouton trop à droite), ouvrir à sa gauche à la place.
+        var opensToTheRight = (rect.left + PANEL_WIDTH + PANEL_MARGIN) <= window.innerWidth;
+        var left = opensToTheRight ? rect.left : (rect.right - PANEL_WIDTH);
+        left = clampNumber(left, PANEL_MARGIN, window.innerWidth - PANEL_WIDTH - PANEL_MARGIN);
+
+        // Vertical : toujours au-dessus du bouton, borné pour rester à l'écran.
+        var bottom = clampNumber((window.innerHeight - rect.top) + 12, PANEL_MARGIN, window.innerHeight - PANEL_MAX_HEIGHT - PANEL_MARGIN);
+
+        panel.style.right = 'auto';
         panel.style.top = 'auto';
-        panel.style.right = right + 'px';
+        panel.style.left = left + 'px';
         panel.style.bottom = bottom + 'px';
     }
 
     function clampPanelToViewport() {
         if (isMobileLayout()) { return; }
-        var currentRight = parseFloat(panel.style.right);
+        var currentLeft = parseFloat(panel.style.left);
         var currentBottom = parseFloat(panel.style.bottom);
-        if (isNaN(currentRight) || isNaN(currentBottom)) { return; }
+        if (isNaN(currentLeft) || isNaN(currentBottom)) { return; }
 
-        panel.style.right = clampNumber(currentRight, 8, window.innerWidth - PANEL_WIDTH - 8) + 'px';
-        panel.style.bottom = clampNumber(currentBottom, 8, window.innerHeight - PANEL_MAX_HEIGHT - 8) + 'px';
+        panel.style.left = clampNumber(currentLeft, PANEL_MARGIN, window.innerWidth - PANEL_WIDTH - PANEL_MARGIN) + 'px';
+        panel.style.bottom = clampNumber(currentBottom, PANEL_MARGIN, window.innerHeight - PANEL_MAX_HEIGHT - PANEL_MARGIN) + 'px';
     }
 
     window.addEventListener('resize', function () {
