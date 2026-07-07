@@ -1,7 +1,7 @@
 # Procédure de portage — claude_hodina → chahere/hodina (branche develop)
 
 Date : 2026-07-07
-Statut : procédure prête à exécuter, non encore jouée.
+Statut : jouée avec succès (patch 1 et patch 2 appliqués, migrés, testés). Voir § Retour d'exécution pour les écarts réels par rapport au plan initial.
 
 ## Contexte
 
@@ -83,17 +83,19 @@ git diff --binary 7bbafa2 87001dc --output=D:\hodina\_portage_j5ad_j5ae\port2_j5
 
 ```powershell
 cd D:\hodina\hodina.fr
-git apply --check --3way D:\hodina\_portage_j5ad_j5ae\port1_j5ad_base.patch
+git apply --check --3way --exclude="*.bak" --exclude="*.bak.bak" --exclude="CLAUDE.md" --exclude="importmap.php" D:\hodina\_portage_j5ad_j5ae\port1_j5ad_base.patch
+echo $LASTEXITCODE
 ```
-- **Si aucune erreur** : passer à l'application réelle ci-dessous.
-- **Si des erreurs sortent** : noter précisément les fichiers en échec, ne rien appliquer, me transmettre la sortie exacte (+ le contenu actuel des fichiers concernés côté hodina.fr) pour construire une résolution manuelle avant de continuer.
+Les 4 exclusions sont **confirmées nécessaires** (cf. § Retour d'exécution) : `tools/deploy-hodina-by-tag.sh.bak` n'existe pas dans l'index hodina.fr (échec dur sur une suppression), `CLAUDE.md` et `importmap.php` existent déjà côté hodina.fr avec un contenu différent (conflits 3-way).
+- **Si `$LASTEXITCODE` est à 0 et aucune ligne `error:`/`with conflicts`** : passer à l'application réelle ci-dessous.
+- **Si d'autres erreurs sortent** : noter précisément les fichiers en échec, ne rien appliquer, me transmettre la sortie exacte (+ le contenu actuel des fichiers concernés côté hodina.fr) pour construire une résolution manuelle avant de continuer.
 
 ```powershell
-git apply --3way D:\hodina\_portage_j5ad_j5ae\port1_j5ad_base.patch
+git apply --3way --exclude="*.bak" --exclude="*.bak.bak" --exclude="CLAUDE.md" --exclude="importmap.php" D:\hodina\_portage_j5ad_j5ae\port1_j5ad_base.patch
 git status
-git diff --check
+git diff --cached --check
 ```
-`git diff --check` doit ressortir vide (sinon il détecte des marqueurs de conflit `<<<<<<<` restés dans des fichiers — à résoudre avant de continuer). Vérifier ensuite à l'œil `templates/base.html.twig`, `docs/DEPLOIEMENT_PREPROD.md` et `importmap.php` (§ Points de vigilance) même si l'application n'a rien signalé.
+`--3way` met automatiquement les fichiers résolus en index (staged) : utiliser `git diff --cached --check` (pas `git diff --check` seul, qui ne regarderait plus rien une fois tout indexé) pour détecter d'éventuels marqueurs de conflit `<<<<<<<` restés dans des fichiers. Vérifier ensuite à l'œil `templates/base.html.twig` et `docs/DEPLOIEMENT_PREPROD.md` (§ Points de vigilance) même si l'application n'a rien signalé.
 
 ## Phase 3 — Dépendances, assets, migrations, cache (après le lot 1)
 
@@ -126,14 +128,15 @@ git commit -m "feat(j5ad): assistant IA client connecte, tickets support, FAQ et
 ## Phase 6 — Lot 2 (J5AE) : vérification puis application
 
 ```powershell
-git apply --check --3way D:\hodina\_portage_j5ad_j5ae\port2_j5ae_widget.patch
+git apply --check --3way --exclude="assets/admin.js" D:\hodina\_portage_j5ad_j5ae\port2_j5ae_widget.patch
+echo $LASTEXITCODE
 ```
-Même logique qu'en Phase 2 : ne rien forcer si erreur.
+`assets/admin.js` est le seul fichier de ce patch modifié par ailleurs côté hodina.fr (fix `dd12ee9` "collapse the Support menu section", ajouté manuellement avant le portage) : à exclure, sinon conflit sur un changement déjà présent. Aucune autre exclusion nécessaire pour ce patch (ni `.bak`, ni `importmap.php`, ni `CLAUDE.md`, cf. § Retour d'exécution). Même logique qu'en Phase 2 : ne rien forcer si une autre erreur sort.
 
 ```powershell
-git apply --3way D:\hodina\_portage_j5ad_j5ae\port2_j5ae_widget.patch
+git apply --3way --exclude="assets/admin.js" D:\hodina\_portage_j5ad_j5ae\port2_j5ae_widget.patch
 git status
-git diff --check
+git diff --cached --check
 ```
 Vérifier à l'œil `public/css/style_mobile.css` et `templates/base.html.twig` (§ Points de vigilance).
 
@@ -191,3 +194,16 @@ git branch -D port/j5ad-j5ae-20260707
 - `config/bundles.php` : aucune différence entre `7c840e7` et HEAD → rien à fusionner sur ce fichier.
 - `config/` : seuls deux fichiers YAML *ajoutés* (`http_client.yaml`, `rate_limiter.yaml`) + suppression de deux `.bak` — pas de fichier de config existant modifié en dehors de ceux listés en § Points de vigilance.
 - `importmap.php` confirmé absent de l'instantané `7c840e7` (`git show 7c840e7:importmap.php` → « exists on disk, but not in 7c840e7 »).
+
+## Retour d'exécution (2026-07-07)
+
+Procédure jouée en local par l'utilisateur, patch 1 puis patch 2, avec succès. Écarts réels par rapport au plan initial :
+
+- **`tools/deploy-hodina-by-tag.sh.bak`** : `git apply --check --3way` sans exclusion a échoué en dur (`does not exist in index`) — ce fichier (comme probablement d'autres `.bak`) n'a jamais existé côté hodina.fr, contrairement à l'hypothèse initiale. Résolu par `--exclude="*.bak" --exclude="*.bak.bak"` : aucune perte, ces suppressions n'avaient de toute façon rien à faire sur hodina.fr.
+- **`CLAUDE.md`** : conflit confirmé — hodina.fr a bien son propre `CLAUDE.md`, distinct de celui de claude_hodina. Laissé tel quel côté hodina.fr (exclu du patch), non bloquant, décision de fusion éventuelle reportée à plus tard.
+- **`importmap.php`** : conflit confirmé à l'application, mais **sans besoin de fusion réelle** — hodina.fr avait déjà l'entrée `admin` ajoutée manuellement au préalable (avec un commentaire indicateur au contenu mal encodé, `// âœ… AJOUTE Ã‡A`, sans impact fonctionnel, supprimé par nettoyage). Les entrées propres à hodina.fr (`@hotwired/stimulus`, `@symfony/stimulus-bundle`, `@hotwired/turbo`) sont restées intactes puisque le fichier a été exclu du patch.
+- **`assets/admin.js`** (patch 2, non anticipé dans le plan initial) : l'utilisateur avait déjà appliqué manuellement le contenu du commit `dd12ee9` (ajout de `'Support'` à `sectionNames`) avant de lancer le patch 2. Vérifié par comparaison ligne à ligne avec la version claude_hodina : identique à un espace près (cosmétique). Résolu par `--exclude="assets/admin.js"`.
+- **`config/bundles.php`** : confirmé sans écart, comme anticipé — aucune action nécessaire.
+- Cycle composer/assets/migrations/cache (Phases 3 et 6) : exécuté sans erreur pour les deux lots, `doctrine:schema:validate` vert à chaque étape, `assets:install public` republie proprement les assets EasyAdmin.
+- **`ai_chatbot_enabled`** : la migration `Version20260706180000` seed ce réglage désactivé par défaut (`value = '0'`), donc le lien « Assistant » de `/mon-compte` reste invisible tant qu'il n'est pas activé manuellement dans EasyAdmin (Réglages > Technique / maintenance) — comportement voulu, documenté dans `README_MAJ_J5AD_CHATBOT_IA_SUPPORT_CLIENT_20260706.md`, pas un défaut du portage. À activer avant de tester le chatbot IA.
+- Tests fonctionnels des deux lots validés par l'utilisateur : connexion client, `/mon-compte/assistant`, tickets support/FAQ EasyAdmin, `/contact` (lot 1) ; mascotte flottante « Assistant Hodina » visible et fonctionnelle (lot 2).
