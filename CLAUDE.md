@@ -44,8 +44,9 @@ Ce fichier est le point d'entrée. Il complète — sans les répéter — les r
 
 Symptôme → cause → correctif. Détail complet dans `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md`.
 
-1. **Lancer l'app en local** → `symfony server:start` (sert les assets statiques ET route les URLs propres).
-   Ne **PAS** faire `php -S host:port -t public public/index.php` : le script routeur + Symfony Runtime fait `require SCRIPT_FILENAME`, donc chaque asset (CSS/images) renvoie une erreur 500 → page cassée.
+1. **Lancer l'app en local** :
+   - ✅ `symfony server:start --no-tls`, **ou** pour choisir le port : `php -S 127.0.0.1:8002 -t public` (**sans** routeur). Les deux servent les assets statiques ET routent les URLs propres.
+   - ❌ **Jamais** `php -S host:port -t public public/index.php` : passer `public/index.php` comme script routeur + Symfony Runtime fait `require SCRIPT_FILENAME`, donc chaque asset (CSS/images) renvoie 500 → page nue, icônes SVG géantes (« rond bleu »).
 
 2. **`cache:clear` plante (OOM « Allowed memory size … exhausted » dans Twig Compiler)** → limite PHP 128 Mo trop juste pour le warmup. Utiliser :
    ```powershell
@@ -65,6 +66,11 @@ Symptôme → cause → correctif. Détail complet dans `docs/NOTES_ENVIRONNEMEN
 5. **`git stash -u` embarque les fichiers non suivis** (`composer.json`, `.env`, `bin/console`) → peut casser l'install (composer.json remplacé par un vide → 121 paquets désinstallés). Prudence avec `-u` ; restaurer via `git restore --source="stash@{0}^3" -- <fichier>`.
 
 6. **Base neuve : chaîne de migrations réparée.** Deux migrations de juin étaient bancales, rendues défensives : `Version20260604095052` (référençait des colonnes créées après elle par `…100000`) et `Version20260604113406` (doublon de `…112000`), + `Version20260706210000` (normalisation résiduelle du schéma). Sur base neuve, `doctrine:migrations:migrate` passe désormais jusqu'au bout et `doctrine:schema:validate` est vert.
+
+7. **Backoffice EasyAdmin non stylé (rond bleu / icônes SVG géantes) alors que le CSS public charge** → les assets du bundle EasyAdmin renvoient 404 (`GET /bundles/easyadmin/app.*.css`) : périmés/absents dans `public/bundles/` après un `composer install`/`update` (les hashs côté vendor ont changé). Republier :
+   ```powershell
+   php bin/console assets:install public
+   ```
 
 ## Assets / CSS
 

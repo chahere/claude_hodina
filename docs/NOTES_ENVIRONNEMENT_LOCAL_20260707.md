@@ -139,12 +139,37 @@ Tous les assets renvoient 500 → page sans styles.
 
 **Cause** : `php -S 0.0.0.0:8001 -t public .\public\index.php` utilise `index.php` comme **script routeur**. Symfony Runtime fait `require SCRIPT_FILENAME` ; pour une requête d'asset, `SCRIPT_FILENAME` pointe le fichier statique (CSS…), que PHP « require » comme du PHP → retour `int(1)` → exception.
 
-**Correctif** : utiliser le serveur Symfony CLI (sert les statiques + route correctement).
+**Correctif** : deux options valides (les deux servent statiques **et** routes).
 ```powershell
+# Option 1 : serveur Symfony CLI
 symfony server:stop
 symfony server:start --no-tls
+
+# Option 2 : serveur PHP intégré AVEC choix du port, SANS routeur
+php -S 127.0.0.1:8002 -t public
 ```
-Le `php -S … public/index.php` n'est pas compatible avec Symfony Runtime.
+Le `php -S … public/index.php` (avec `public/index.php` en fin de ligne) n'est **pas** compatible avec Symfony Runtime : c'est ce `public/index.php` en argument routeur qui casse les assets, pas le `php -S` en soi.
+
+---
+
+## 6bis. Backoffice EasyAdmin non stylé (« rond bleu ») malgré le CSS public OK
+
+**Symptôme** : le CSS public (`/css/style_mobile.css`) et l'entrée AssetMapper `admin` chargent en 200, mais `/ouegnewe/dashboard` s'affiche nu (titre en lien bleu souligné, icône compte SVG géante = « rond bleu »). Dans les logs du serveur :
+```
+[404]: GET /bundles/easyadmin/app.fe563759.css - No such file or directory
+[404]: GET /bundles/easyadmin/app.dd0f3718.js  - No such file or directory
+[404]: GET /bundles/easyadmin/page-color-scheme.75224563.js
+```
+
+**Cause** : les assets **propres au bundle EasyAdmin** vivent dans `public/bundles/easyadmin/` (fichiers hashés). Après un `composer install`/`update`, la version d'EasyAdmin change → les templates réclament de nouveaux hashs (`app.fe563759.css`) alors que `public/bundles/` contient les anciens (ou rien). D'où les 404 → aucun style EasyAdmin.
+
+À ne pas confondre avec l'entrée AssetMapper `admin` (§4), qui, elle, concerne `assets/admin.js` (Stimulus) et charge bien ici.
+
+**Correctif** : republier les assets des bundles vers `public/bundles/`.
+```powershell
+php bin/console assets:install public
+```
+Puis `Ctrl+F5`. (`public/bundles/` est normalement régénérable ; en général on le `gitignore`.)
 
 ---
 
