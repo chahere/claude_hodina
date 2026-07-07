@@ -26,7 +26,7 @@
             aria-expanded="false"
             aria-controls="hodina-chat-widget-panel"
             aria-label="Ouvrir ou déplacer l’assistant Hodina">
-        <img src="{{ asset('images/assistant/assistant_hodina_1.png') }}" alt="" class="hodina-chat-widget__toggle-icon" data-chat-widget-frame>
+        <img src="{{ asset('images/assistant/assistant_hodina_1.png') }}" alt="" class="hodina-chat-widget__toggle-icon" data-chat-widget-frame draggable="false">
     </button>
 
     <section id="hodina-chat-widget-panel"
@@ -425,8 +425,14 @@
 
     var dragState = null;
 
+    // Empêche le glisser-déposer natif du navigateur sur l'image (qui
+    // volait le geste au glisser-déposer personnalisé ci-dessous).
+    toggle.addEventListener('dragstart', function (event) { event.preventDefault(); });
+
     toggle.addEventListener('pointerdown', function (event) {
         if (event.button !== undefined && event.button !== 0) { return; }
+
+        event.preventDefault();
 
         var start = currentPosition();
         dragState = {

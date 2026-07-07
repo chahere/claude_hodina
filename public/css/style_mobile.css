@@ -4054,6 +4054,10 @@ body.address-picker-open{
   border-radius: 999px;
   background: #fff;
   padding: 4px;
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
 }
 
 .hodina-chat-widget__panel{
