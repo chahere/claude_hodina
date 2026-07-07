@@ -231,16 +231,11 @@
     }
 
     function openPanel() {
-        // Calculer la position AVANT de masquer le bouton : on a besoin de
-        // son rectangle réel (getBoundingClientRect), qui devient nul une
-        // fois "hidden".
         repositionPanelNearToggle();
         panel.hidden = false;
-        // Masquer le bouton pendant que le panneau est ouvert : sinon le
-        // panneau (au-dessus en z-index) peut le recouvrir entièrement et le
-        // rendre impossible à cliquer/déplacer. On rouvre uniquement via la
-        // croix de fermeture du panneau (comme la plupart des widgets de chat).
-        toggle.hidden = true;
+        // Le bouton reste visible (cf. z-index en CSS, toujours au-dessus du
+        // panneau) : on peut le recliquer pour fermer, ou le glisser pour
+        // repositionner le panneau en direct (cf. pointermove plus bas).
         toggle.setAttribute('aria-expanded', 'true');
         state.open = true;
         saveState();
@@ -256,7 +251,6 @@
 
     function closePanel() {
         panel.hidden = true;
-        toggle.hidden = false;
         toggle.setAttribute('aria-expanded', 'false');
         state.open = false;
         saveState();
@@ -441,27 +435,13 @@
         panel.style.bottom = bottom + 'px';
     }
 
-    function clampPanelToViewport() {
-        if (isMobileLayout()) { return; }
-        var currentLeft = parseFloat(panel.style.left);
-        var currentBottom = parseFloat(panel.style.bottom);
-        if (isNaN(currentLeft) || isNaN(currentBottom)) { return; }
-
-        panel.style.left = clampNumber(currentLeft, PANEL_MARGIN, window.innerWidth - PANEL_WIDTH - PANEL_MARGIN) + 'px';
-        panel.style.bottom = clampNumber(currentBottom, PANEL_MARGIN, window.innerHeight - PANEL_MAX_HEIGHT - PANEL_MARGIN) + 'px';
-    }
-
     window.addEventListener('resize', function () {
-        if (!toggle.hidden) {
-            // Bouton visible (panneau fermé) : le repositionner lui-même.
-            var pos = currentPosition();
-            var clamped = clampPosition(pos.right, pos.bottom);
-            applyPosition(clamped.right, clamped.bottom);
-        } else if (!panel.hidden) {
-            // Panneau ouvert, bouton masqué (rectangle nul) : re-borner la
-            // position déjà appliquée au panneau plutôt que de la redériver
-            // du bouton caché.
-            clampPanelToViewport();
+        var pos = currentPosition();
+        var clamped = clampPosition(pos.right, pos.bottom);
+        applyPosition(clamped.right, clamped.bottom);
+
+        if (!panel.hidden) {
+            repositionPanelNearToggle();
         }
     });
 
@@ -505,6 +485,12 @@
 
         var next = clampPosition(dragState.startRight - deltaX, dragState.startBottom - deltaY);
         applyPosition(next.right, next.bottom);
+
+        // Le panneau suit le bouton en direct pendant le glissement, s'il
+        // est ouvert.
+        if (!panel.hidden) {
+            repositionPanelNearToggle();
+        }
     });
 
     function endDrag(event) {
@@ -604,7 +590,6 @@
     if (state.open) {
         repositionPanelNearToggle();
         panel.hidden = false;
-        toggle.hidden = true;
         toggle.setAttribute('aria-expanded', 'true');
     }
 })();

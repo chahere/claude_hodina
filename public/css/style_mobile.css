@@ -4020,7 +4020,9 @@ body.address-picker-open{
   position: fixed;
   right: 16px;
   bottom: 96px;
-  z-index: 2000;
+  /* Toujours au-dessus du panneau (2001) : le bouton reste visible et
+     déplaçable même quand le panneau est ouvert et le recouvre visuellement. */
+  z-index: 2002;
   width: 60px;
   height: 60px;
   border-radius: 999px;
