@@ -4246,3 +4246,50 @@ Le formulaire de contact `/contact` et les tickets support fonctionnent indépen
 recette-j5ad-chatbot-ia-support-client-20260707
 prod-j5ad-chatbot-ia-support-client-20260707
 ```
+
+# Déploiement 07/07/2026 — J5AE Widget flottant Assistant Hodina
+
+## Objet
+
+Lot J5AE : widget conversationnel flottant "Assistant Hodina" (moteur à règles, aucune IA), disponible sur tout le site public (catalogue, produit, panier, checkout, contact, espace client) pour visiteurs anonymes et clients connectés. Escalade vers `SupportTicket` (origine `CHAT_WIDGET`), réutilise les entités et le service de notification du lot J5AD. Détail : `README_MAJ_J5AE_WIDGET_ASSISTANT_HODINA_20260707.md`.
+
+## Différences avec un déploiement classique
+
+Aucune nouvelle dépendance Composer, aucun nouveau bundle. La seule migration (`Version20260707040000`) ajoute une ligne de réglage dans `hodina_setting` (idempotente). Les 3 garde-fous de déploiement posés pour J5AD (assets EasyAdmin, `importmap.php`, dépendances runtime) restent valables et suffisants : rien de spécifique à ajouter au script pour ce lot.
+
+## Commande recette
+
+```bash
+bash tools/deploy-hodina-by-tag.sh \
+  --project-dir /home/vopu3712/recette.hodina.fr \
+  --tag j5ae-widget-assistant-hodina-20260707 \
+  --target recette
+```
+
+## Commande production (après validation recette)
+
+```bash
+bash tools/deploy-hodina-by-tag.sh \
+  --project-dir /home/vopu3712/hodina.fr \
+  --tag j5ae-widget-assistant-hodina-20260707 \
+  --target prod
+```
+
+## Réglage post-déploiement (optionnel)
+
+Le bouton "Continuer sur Messenger" reste masqué tant que le lien n'est pas renseigné. Si souhaité : EasyAdmin → Réglages → Technique / maintenance → "Lien Messenger support" → coller l'URL publique de la page Messenger. Propre à chaque environnement, aucun jeton Meta n'est stocké ici (lien uniquement).
+
+## Contrôles recette / prod
+
+- Le bouton flottant (logo Hodina) apparaît sur catalogue, fiche produit, panier, checkout, contact, espace client.
+- Absent sur `/mon-compte/assistant` et `/djama`.
+- Une question "frais de livraison" ne renvoie jamais de tarif chiffré, seulement un renvoi vers Infos livraison.
+- Une escalade (formulaire ou mot-clé "humain"/"parler à l'équipe") crée un ticket EasyAdmin → Support → Tickets support, origine "Widget assistant Hodina", e-mail admin dans Logs → E-mails (logs).
+- `doctrine:schema:validate --env=prod` vert.
+
+## Tags
+
+```text
+recette-j5ae-widget-assistant-hodina-20260707
+prod-j5ae-widget-assistant-hodina-20260707
+```
