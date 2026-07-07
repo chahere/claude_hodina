@@ -12,15 +12,13 @@
      data-token-message="{{ csrf_token('widget_chat_message') }}"
      data-token-escalate="{{ csrf_token('widget_chat_escalate') }}"
      data-connected="{{ app.user ? '1' : '0' }}"
-     {#
-        Frames de l'animation du bouton flottant (illusion de mouvement).
-        En attente des 4 visuels hippocampe fournis : les 4 entrées pointent
-        pour l'instant vers le même logo (on ne prétend jamais qu'une image
-        existe sans l'avoir vérifiée). Dès que les fichiers réels seront
-        déposés dans public/images/assistant/, remplacer ces 4 chemins :
-        l'animation se déclenche automatiquement dès que les URLs diffèrent.
-     #}
-     data-frames="{{ [asset('images/logo_hodina_mobile.png'), asset('images/logo_hodina_mobile.png'), asset('images/logo_hodina_mobile.png'), asset('images/logo_hodina_mobile.png')]|json_encode }}">
+     {# Frames de l'animation du bouton flottant (illusion de mouvement). #}
+     data-frames="{{ [
+         asset('images/assistant/assistant_hodina_1.png'),
+         asset('images/assistant/assistant_hodina_2.png'),
+         asset('images/assistant/assistant_hodina_3.png'),
+         asset('images/assistant/assistant_hodina_4.png')
+     ]|json_encode }}">
 
     <button type="button"
             class="hodina-chat-widget__toggle"
@@ -28,7 +26,7 @@
             aria-expanded="false"
             aria-controls="hodina-chat-widget-panel"
             aria-label="Ouvrir ou déplacer l’assistant Hodina">
-        <img src="{{ asset('images/logo_hodina_mobile.png') }}" alt="" class="hodina-chat-widget__toggle-icon" data-chat-widget-frame>
+        <img src="{{ asset('images/assistant/assistant_hodina_1.png') }}" alt="" class="hodina-chat-widget__toggle-icon" data-chat-widget-frame>
     </button>
 
     <section id="hodina-chat-widget-panel"
@@ -39,7 +37,7 @@
              aria-label="Assistant Hodina">
         <header class="hodina-chat-widget__header">
             <div class="hodina-chat-widget__header-brand">
-                <img src="{{ asset('images/logo_hodina_mobile.png') }}" alt="" class="hodina-chat-widget__header-logo">
+                <img src="{{ asset('images/assistant/assistant_hodina_1.png') }}" alt="" class="hodina-chat-widget__header-logo">
                 <span>Assistant Hodina</span>
             </div>
             <button type="button" class="hodina-chat-widget__close" data-chat-widget-close aria-label="Fermer l’assistant">✕</button>
