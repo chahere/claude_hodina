@@ -231,8 +231,16 @@
     }
 
     function openPanel() {
-        panel.hidden = false;
+        // Calculer la position AVANT de masquer le bouton : on a besoin de
+        // son rectangle réel (getBoundingClientRect), qui devient nul une
+        // fois "hidden".
         repositionPanelNearToggle();
+        panel.hidden = false;
+        // Masquer le bouton pendant que le panneau est ouvert : sinon le
+        // panneau (au-dessus en z-index) peut le recouvrir entièrement et le
+        // rendre impossible à cliquer/déplacer. On rouvre uniquement via la
+        // croix de fermeture du panneau (comme la plupart des widgets de chat).
+        toggle.hidden = true;
         toggle.setAttribute('aria-expanded', 'true');
         state.open = true;
         saveState();
@@ -248,6 +256,7 @@
 
     function closePanel() {
         panel.hidden = true;
+        toggle.hidden = false;
         toggle.setAttribute('aria-expanded', 'false');
         state.open = false;
         saveState();
@@ -390,6 +399,18 @@
         applyPosition(initialClamped.right, initialClamped.bottom);
     }
 
+    // Dimensions desktop du panneau telles que fixées dans le CSS
+    // (@media min-width:720px) : valeurs connues à l'avance, pas de mesure
+    // live fragile (offsetWidth/Height pouvait renvoyer 0 ou une valeur
+    // incohérente selon le moment de l'appel).
+    var PANEL_WIDTH = 380;
+    var PANEL_MAX_HEIGHT = 560;
+
+    function clampNumber(value, min, max) {
+        if (max < min) { return min; }
+        return Math.min(Math.max(value, min), max);
+    }
+
     function repositionPanelNearToggle() {
         if (isMobileLayout()) {
             // Mobile : le panneau reste ancré en bas pleine largeur (spec
@@ -402,10 +423,8 @@
         }
 
         var pos = currentPosition();
-        var panelWidth = panel.offsetWidth || 380;
-        var panelHeight = panel.offsetHeight || 520;
-        var right = Math.min(Math.max(pos.right, 8), Math.max(8, window.innerWidth - panelWidth - 8));
-        var bottom = Math.min(pos.bottom + toggle.offsetHeight + 12, Math.max(8, window.innerHeight - panelHeight - 8));
+        var right = clampNumber(pos.right, 8, window.innerWidth - PANEL_WIDTH - 8);
+        var bottom = clampNumber(pos.bottom + toggle.offsetHeight + 12, 8, window.innerHeight - PANEL_MAX_HEIGHT - 8);
 
         panel.style.left = 'auto';
         panel.style.top = 'auto';
@@ -413,13 +432,27 @@
         panel.style.bottom = bottom + 'px';
     }
 
-    window.addEventListener('resize', function () {
-        var pos = currentPosition();
-        var clamped = clampPosition(pos.right, pos.bottom);
-        applyPosition(clamped.right, clamped.bottom);
+    function clampPanelToViewport() {
+        if (isMobileLayout()) { return; }
+        var currentRight = parseFloat(panel.style.right);
+        var currentBottom = parseFloat(panel.style.bottom);
+        if (isNaN(currentRight) || isNaN(currentBottom)) { return; }
 
-        if (!panel.hidden) {
-            repositionPanelNearToggle();
+        panel.style.right = clampNumber(currentRight, 8, window.innerWidth - PANEL_WIDTH - 8) + 'px';
+        panel.style.bottom = clampNumber(currentBottom, 8, window.innerHeight - PANEL_MAX_HEIGHT - 8) + 'px';
+    }
+
+    window.addEventListener('resize', function () {
+        if (!toggle.hidden) {
+            // Bouton visible (panneau fermé) : le repositionner lui-même.
+            var pos = currentPosition();
+            var clamped = clampPosition(pos.right, pos.bottom);
+            applyPosition(clamped.right, clamped.bottom);
+        } else if (!panel.hidden) {
+            // Panneau ouvert, bouton masqué (rectangle nul) : re-borner la
+            // position déjà appliquée au panneau plutôt que de la redériver
+            // du bouton caché.
+            clampPanelToViewport();
         }
     });
 
@@ -560,8 +593,9 @@
     }
 
     if (state.open) {
-        panel.hidden = false;
         repositionPanelNearToggle();
+        panel.hidden = false;
+        toggle.hidden = true;
         toggle.setAttribute('aria-expanded', 'true');
     }
 })();
