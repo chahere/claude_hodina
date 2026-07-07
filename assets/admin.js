@@ -196,7 +196,7 @@ function initCollapsibleAdminMenu() {
         return;
     }
 
-    const sectionNames = ['Logistique', 'Catalogue', 'Commandes', 'Clients', 'Vendeurs', 'Livreurs', 'Logs', 'Réglages'];
+    const sectionNames = ['Logistique', 'Catalogue', 'Commandes', 'Clients', 'Vendeurs', 'Livreurs', 'Logs', 'Réglages', 'Support'];
     const sectionRows = findMenuSectionRows(sidebar, sectionNames);
     if (sectionRows.length === 0) {
         return;
