@@ -18,6 +18,7 @@ class SupportTicket
 {
     public const ORIGIN_CONTACT_FORM = 'CONTACT_FORM';
     public const ORIGIN_CHATBOT_ESCALATION = 'CHATBOT_ESCALATION';
+    public const ORIGIN_CHAT_WIDGET = 'CHAT_WIDGET';
 
     public const STATUS_OPEN = 'OPEN';
     public const STATUS_IN_PROGRESS = 'IN_PROGRESS';

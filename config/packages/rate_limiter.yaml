@@ -12,3 +12,16 @@ framework:
             policy: 'sliding_window'
             limit: 30
             interval: '5 minutes'
+
+        # Widget "Assistant Hodina" (moteur à règles, public, anonyme + connecté) :
+        # réponses gratuites (pas d'appel API payant) donc plus permissif que le chatbot IA.
+        widget_message_per_ip:
+            policy: 'sliding_window'
+            limit: 40
+            interval: '5 minutes'
+
+        # Escalade widget -> ticket support : plus stricte (écrit en base, envoie un e-mail).
+        widget_escalation_per_ip:
+            policy: 'sliding_window'
+            limit: 5
+            interval: '15 minutes'

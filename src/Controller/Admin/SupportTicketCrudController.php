@@ -233,6 +233,7 @@ final class SupportTicketCrudController extends AbstractCrudController
         return [
             SupportTicket::ORIGIN_CONTACT_FORM => 'Formulaire de contact',
             SupportTicket::ORIGIN_CHATBOT_ESCALATION => 'Escalade chatbot IA',
+            SupportTicket::ORIGIN_CHAT_WIDGET => 'Widget assistant Hodina',
         ];
     }
 }
