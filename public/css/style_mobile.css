@@ -4039,6 +4039,14 @@ body.address-picker-open{
   -webkit-user-select: none;
 }
 
+/* Sans cette règle, toggle.hidden=true (JS) n'a aucun effet visuel : une
+   règle d'auteur (display:flex ci-dessus) l'emporte toujours sur la règle
+   par défaut du navigateur pour [hidden], même à spécificité égale. Même
+   correctif déjà en place pour .hodina-chat-widget__panel[hidden]. */
+.hodina-chat-widget__toggle[hidden]{
+  display: none;
+}
+
 .hodina-chat-widget__toggle:hover,
 .hodina-chat-widget__toggle:focus-visible{
   background: var(--brand-2);
@@ -4205,6 +4213,17 @@ body.address-picker-open{
   padding: 0 1rem .75rem;
   background: var(--card);
   flex: 0 0 auto;
+}
+
+/* Sans ces deux règles, [hidden] (JS) est sans effet : display:flex
+   ci-dessus (règle d'auteur) l'emporte toujours sur la règle par défaut du
+   navigateur pour [hidden]. Le formulaire d'escalade en particulier
+   s'affichait alors en permanence dès l'ouverture du chat, même sur le
+   simple message d'accueil (cause réelle du panneau "trop grand" sur
+   iPhone — sans rapport avec vh/dvh ni le cache). */
+.hodina-chat-widget__quick-replies[hidden],
+.hodina-chat-widget__escalate[hidden]{
+  display: none;
 }
 
 .hodina-chat-widget__quick-reply{
