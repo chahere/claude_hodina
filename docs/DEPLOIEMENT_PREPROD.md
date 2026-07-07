@@ -4160,3 +4160,89 @@ Tags :
 recette-j5aa-address-locality-20260704
 prod-j5aa-address-locality-20260704
 ```
+
+# Déploiement 07/07/2026 — J5AD Chatbot IA + support client
+
+## Objet
+
+Lot J5AD : chatbot IA pour clients connectés dans `/mon-compte`, escalade vers ticket support humain, formulaire de contact anonyme (`/contact`), réglages LLM (clé API chiffrée), flag d'activation `HodinaSetting::ai_chatbot_enabled`. Détail fonctionnel : `README_MAJ_J5AD_CHATBOT_IA_SUPPORT_CLIENT_20260706.md`. Erreurs d'environnement rencontrées en mise en place locale et leurs correctifs : `NOTES_ENVIRONNEMENT_LOCAL_20260707.md`.
+
+## Nouveautés côté déploiement (script `tools/deploy-hodina-by-tag.sh`)
+
+Trois garde-fous ajoutés (additifs, le flux critique backup/migrations/cache est inchangé) :
+
+1. **Publication des assets des bundles** — `php bin/console assets:install public` publie les CSS/JS d'EasyAdmin dans `public/bundles/`. `asset-map:compile` ne gère que `public/assets/` ; sans cette étape, après une montée de version d'EasyAdmin le backoffice s'affiche non stylé (404 sur `/bundles/easyadmin/app.*.css`, « rond bleu »).
+2. **Vérification `importmap.php`** — l'entrée AssetMapper `admin` doit être présente (sinon EasyAdmin lève « The entrypoint "admin" does not exist in importmap.php », 500 sur `/ouegnewe`). `importmap.php` est désormais versionné.
+3. **Contrôle des dépendances J5AD** — `symfony/rate-limiter` et `symfony/http-client` sont requis par `config/packages/rate_limiter.yaml` et `http_client.yaml`. `composer.json/lock` n'étant pas versionnés, le script avertit tôt et donne la commande `composer require` si `vendor/` ne les contient pas.
+
+## Prérequis serveur — PREMIÈRE mise en recette du lot
+
+Le `composer.lock` du serveur ne contient pas encore les deux nouveaux paquets. Avant le premier déploiement J5AD (ou pendant, via `RUN_COMPOSER=1`) :
+
+```bash
+cd /home/vopu3712/recette.hodina.fr
+composer require symfony/rate-limiter symfony/http-client
+```
+
+Sans eux, `cache:warmup` échoue à compiler le conteneur (config `framework.rate_limiter` / `framework.http_client` sans le composant installé).
+
+## Commande recette
+
+```bash
+RUN_COMPOSER=1 bash tools/deploy-hodina-by-tag.sh \
+  --project-dir /home/vopu3712/recette.hodina.fr \
+  --tag j5ad-chatbot-ia-support-client-20260707 \
+  --target recette
+```
+
+## Commande production (après validation recette)
+
+```bash
+RUN_COMPOSER=1 bash tools/deploy-hodina-by-tag.sh \
+  --project-dir /home/vopu3712/hodina.fr \
+  --tag j5ad-chatbot-ia-support-client-20260707 \
+  --target prod
+```
+
+Le tag doit être créé depuis `main` après merge de la PR (règle : déploiement uniquement par tag contenu dans `origin/main`).
+
+## Si déploiement manuel (rappel des étapes sensibles)
+
+```bash
+php bin/console doctrine:migrations:status --env=prod
+php bin/console doctrine:migrations:migrate --env=prod --no-interaction
+php bin/console asset-map:compile --env=prod
+php bin/console assets:install public --env=prod          # publie les assets EasyAdmin, evite le « rond bleu »
+php -d memory_limit=-1 bin/console cache:clear --env=prod --no-warmup
+php -d memory_limit=-1 bin/console cache:warmup --env=prod
+php bin/console doctrine:schema:validate --env=prod
+```
+
+## Réglages post-déploiement (EasyAdmin)
+
+Le chatbot est **désactivé par défaut** (`ai_chatbot_enabled = 0`, seedé par la migration). Une fois le lot validé :
+
+- Réglages → Technique / maintenance → activer **Chatbot IA activé**.
+- Réglages → Réglages IA → choisir le fournisseur (Mock pour tester sans clé, sinon Anthropic/OpenAI + nom du modèle + clé API). La clé est chiffrée (AES-256-GCM dérivée de `APP_SECRET`) et jamais réaffichée. Elle est **propre à chaque environnement** : à ressaisir en recette et en prod (`APP_SECRET` diffère, la clé n'est pas transférable).
+
+Le formulaire de contact `/contact` et les tickets support fonctionnent indépendamment du flag.
+
+## Contrôles recette / prod
+
+- Backoffice `/ouegnewe` stylé (pas de « rond bleu ») → assets EasyAdmin bien publiés (`public/bundles/easyadmin`).
+- `/contact` accessible en visiteur non connecté → crée un ticket dans EasyAdmin → Support → Tickets support (e-mail admin logué dans E-mails (logs)).
+- `doctrine:schema:validate --env=prod` vert.
+- Flag OFF → lien « Assistant » absent de `/mon-compte`, `/mon-compte/assistant` redirige, `/contact` toujours actif.
+- Flag ON + provider Mock → `/mon-compte/assistant` répond en texte simulé.
+
+## Warnings connus / non bloquants
+
+- Récap du script : « Dépendances J5AD » en WARN tant que `composer require` n'a pas été fait sur ce serveur → normal au tout premier déploiement, résolu après installation.
+- « Assets EasyAdmin » en WARN si `assets:install` n'a pas encore tourné → le script le lance en étape 12.
+
+## Tags
+
+```text
+recette-j5ad-chatbot-ia-support-client-20260707
+prod-j5ad-chatbot-ia-support-client-20260707
+```
