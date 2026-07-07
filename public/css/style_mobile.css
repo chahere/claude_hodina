@@ -4073,22 +4073,22 @@ body.address-picker-open{
 .hodina-chat-widget__panel{
   position: fixed;
   z-index: 2001;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  max-height: 78vh;
-  /* iOS Safari calcule "vh" sur la plus grande hauteur possible (barre
-     d'adresse rétractée), pas sur la hauteur réellement visible : le
-     panneau semblait bien plus grand que l'écran utile. "dvh" (hauteur de
-     viewport dynamique) suit la zone réellement visible ; ignorée sans
-     casse par les navigateurs qui ne la supportent pas (le vh ci-dessus
-     reste alors la valeur appliquée). */
-  max-height: 78dvh;
+  /* Position/largeur de repli avant l'exécution du JS (repositionPanelNearToggle
+     s'exécute ensuite sur tous les écrans, mobile compris : le panneau est
+     une fenêtre compacte ancrée au-dessus du bouton, jamais une feuille
+     pleine largeur). */
+  right: 16px;
+  bottom: 110px;
+  left: auto;
+  top: auto;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: 560px;
   display: flex;
   flex-direction: column;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 22px 22px 0 0;
+  border-radius: 20px;
   box-shadow: var(--shadow);
   /* Filet de sécurité : si le contenu (formulaire d'escalade + suggestions +
      messages) dépasse malgré tout max-height, on scrolle DANS le panneau
@@ -4351,14 +4351,5 @@ body.address-picker-open{
   .hodina-chat-widget__toggle{
     right: 24px;
     bottom: 32px;
-  }
-
-  .hodina-chat-widget__panel{
-    left: auto;
-    right: 24px;
-    bottom: 104px;
-    width: 380px;
-    max-height: 560px;
-    border-radius: 20px;
   }
 }

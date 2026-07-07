@@ -230,20 +230,14 @@
         return bubble;
     }
 
-    // Sur desktop, le bouton reste visible même panneau ouvert (au-dessus en
-    // z-index) : on peut le recliquer pour fermer, ou le glisser pour
-    // repositionner le panneau en direct (cf. pointermove plus bas). Sur
-    // mobile, le panneau occupe la quasi-totalité de l'écran indépendamment
-    // du bouton (bottom sheet plein écran) : le laisser visible ne ferait
-    // que le faire flotter par-dessus le contenu du panneau, sans utilité.
-    function syncToggleVisibility() {
-        toggle.hidden = !panel.hidden && isMobileLayout();
-    }
-
+    // Le bouton reste toujours visible, même panneau ouvert (au-dessus en
+    // z-index, cf. CSS) : on peut le recliquer pour fermer, ou le glisser
+    // pour repositionner le panneau en direct (cf. pointermove plus bas).
+    // Comportement unifié mobile/desktop : le panneau est une fenêtre
+    // compacte ancrée au-dessus du bouton, jamais une feuille pleine largeur.
     function openPanel() {
         repositionPanelNearToggle();
         panel.hidden = false;
-        syncToggleVisibility();
         toggle.setAttribute('aria-expanded', 'true');
         state.open = true;
         saveState();
@@ -259,7 +253,6 @@
 
     function closePanel() {
         panel.hidden = true;
-        syncToggleVisibility();
         toggle.setAttribute('aria-expanded', 'false');
         state.open = false;
         saveState();
@@ -333,10 +326,6 @@
         window.setTimeout(function () { escalateForm.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 50);
     }
 
-    function isMobileLayout() {
-        return window.matchMedia('(max-width: 719px)').matches;
-    }
-
     // --- Animation "sprite" (illusion de mouvement) ---
     // Ne démarre que si les frames sont réellement différentes : tant que ce
     // sont des placeholders identiques (cf. commentaire Twig ci-dessus), la
@@ -402,42 +391,37 @@
         applyPosition(initialClamped.right, initialClamped.bottom);
     }
 
-    // Dimensions desktop du panneau telles que fixées dans le CSS
-    // (@media min-width:720px) : valeurs connues à l'avance, pas de mesure
-    // live fragile (offsetWidth/Height pouvait renvoyer 0 ou une valeur
-    // incohérente selon le moment de l'appel).
-    var PANEL_WIDTH = 380;
     var PANEL_MAX_HEIGHT = 560;
+    var PANEL_MARGIN = 8;
 
     function clampNumber(value, min, max) {
         if (max < min) { return min; }
         return Math.min(Math.max(value, min), max);
     }
 
-    var PANEL_MARGIN = 8;
+    // Largeur cible réduite sur petit écran (téléphone) — jamais la pleine
+    // largeur de l'écran, bornée pour ne jamais déborder. 380px sur les
+    // écrans larges (identique à la valeur historique desktop).
+    function getPanelWidth() {
+        var target = window.innerWidth < 720 ? 300 : 380;
+        return Math.min(target, window.innerWidth - (PANEL_MARGIN * 2));
+    }
 
+    // Comportement unifié mobile/desktop : le panneau s'ouvre toujours
+    // au-dessus du bouton, et horizontalement à sa droite par défaut, ou à
+    // sa gauche s'il n'y a pas la place (bouton trop proche du bord droit).
     function repositionPanelNearToggle() {
-        if (isMobileLayout()) {
-            // Mobile : le panneau reste ancré en bas pleine largeur (spec
-            // UX mobile-first), indépendant de la position du bouton.
-            panel.style.right = '';
-            panel.style.bottom = '';
-            panel.style.left = '';
-            panel.style.top = '';
-            return;
-        }
-
         var rect = toggle.getBoundingClientRect();
+        var panelWidth = getPanelWidth();
 
-        // Horizontal : ouvrir à droite du bouton par défaut ; s'il n'y a pas
-        // la place (bouton trop à droite), ouvrir à sa gauche à la place.
-        var opensToTheRight = (rect.left + PANEL_WIDTH + PANEL_MARGIN) <= window.innerWidth;
-        var left = opensToTheRight ? rect.left : (rect.right - PANEL_WIDTH);
-        left = clampNumber(left, PANEL_MARGIN, window.innerWidth - PANEL_WIDTH - PANEL_MARGIN);
+        var opensToTheRight = (rect.left + panelWidth + PANEL_MARGIN) <= window.innerWidth;
+        var left = opensToTheRight ? rect.left : (rect.right - panelWidth);
+        left = clampNumber(left, PANEL_MARGIN, window.innerWidth - panelWidth - PANEL_MARGIN);
 
         // Vertical : toujours au-dessus du bouton, borné pour rester à l'écran.
         var bottom = clampNumber((window.innerHeight - rect.top) + 12, PANEL_MARGIN, window.innerHeight - PANEL_MAX_HEIGHT - PANEL_MARGIN);
 
+        panel.style.width = panelWidth + 'px';
         panel.style.right = 'auto';
         panel.style.top = 'auto';
         panel.style.left = left + 'px';
@@ -445,15 +429,9 @@
     }
 
     window.addEventListener('resize', function () {
-        // Recalculer d'abord la visibilité (un redimensionnement peut faire
-        // franchir le seuil mobile/desktop pendant que le panneau est ouvert).
-        syncToggleVisibility();
-
-        if (!toggle.hidden) {
-            var pos = currentPosition();
-            var clamped = clampPosition(pos.right, pos.bottom);
-            applyPosition(clamped.right, clamped.bottom);
-        }
+        var pos = currentPosition();
+        var clamped = clampPosition(pos.right, pos.bottom);
+        applyPosition(clamped.right, clamped.bottom);
 
         if (!panel.hidden) {
             repositionPanelNearToggle();
@@ -605,7 +583,6 @@
     if (state.open) {
         repositionPanelNearToggle();
         panel.hidden = false;
-        syncToggleVisibility();
         toggle.setAttribute('aria-expanded', 'true');
     }
 })();
