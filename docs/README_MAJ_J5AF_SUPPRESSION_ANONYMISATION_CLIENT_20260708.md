@@ -18,7 +18,9 @@ Anonymisation non réversible par nature : aucune donnée d'origine n'est conser
 
 ## Décision DB
 
-Une migration (`Version20260708120000`) : ajoute `customer.is_active` (booléen, défaut vrai) et `customer.anonymized_at` (nullable). Idempotente et défensive (vérifie l'existence des colonnes avant de les ajouter).
+Deux migrations :
+- `Version20260708120000` : ajoute `customer.is_active` (booléen, défaut vrai) et `customer.anonymized_at` (nullable). Idempotente et défensive (vérifie l'existence des colonnes avant de les ajouter).
+- `Version20260708130000` : corrective, trouvée lors du test local — l'`ALTER` de la première migration créait `is_active` en `TINYINT(1) NOT NULL DEFAULT 1`, ne correspondant pas exactement au mapping Doctrine (`#[ORM\Column]` sans `options`, qui attend `TINYINT NOT NULL` sans largeur ni `DEFAULT`), ce qui faisait échouer `doctrine:schema:validate`. Idempotente et défensive (vérifie le type réel via `information_schema`, no-op si déjà normalisé). Détail de l'incident : `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §13.
 
 Aucun changement de contrainte de clé étrangère : la correction de la suppression pilote se fait entièrement côté application (suppression explicite des conversations IA avant le client), pas en base — cohérent avec la façon dont les commandes et adresses sont déjà traitées dans `CustomerPilotCascadeDeleter` depuis l'origine du service.
 

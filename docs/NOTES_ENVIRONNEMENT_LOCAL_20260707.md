@@ -313,6 +313,40 @@ Remplace `AdminContext $context` par `EntityManagerInterface $entityManager` dan
 
 ---
 
+## 13. Migration défensive « 0 sql queries » + `schema:validate` rouge sur une colonne pourtant créée
+
+**Contexte** : lot J5AF, migration `Version20260708120000` (ajoute `customer.is_active` et `customer.anonymized_at`). Après `doctrine:migrations:migrate --no-interaction`, le message laissait croire que rien n'avait été appliqué, alors que `schema:validate` échouait juste après — les deux signaux semblaient se contredire.
+
+**Symptôme** :
+```
+php bin/console doctrine:migrations:migrate --no-interaction
+[notice] Migrating up to DoctrineMigrations\Version20260708120000
+[warning] Migration DoctrineMigrations\Version20260708120000 was executed but did not result in any SQL statements.
+[notice] finished in 144.4ms, used 26M memory, 1 migrations executed, 0 sql queries
+[OK] Successfully migrated to version: DoctrineMigrations\Version20260708120000
+
+php bin/console doctrine:schema:validate
+[OK] The mapping files are correct.
+[ERROR] The database schema is not in sync with the current mapping file.
+
+php bin/console doctrine:schema:update --dump-sql
+ALTER TABLE customer CHANGE is_active is_active TINYINT NOT NULL;
+```
+
+**Piège (double)** :
+1. Le compteur « N sql queries » de Doctrine Migrations ne suit que les instructions passées par `$this->addSql(...)`. Les migrations défensives de ce projet (conditionnelles — `if (!$this->columnExists(...))` — cf. `Version20260703093000`, `Version20260708120000`) exécutent leurs `ALTER`/`CREATE` via `$this->connection->executeStatement(...)` directement, pour pouvoir les entourer d'une condition. Ces instructions **s'exécutent réellement contre la base**, mais restent invisibles pour ce compteur : « 0 sql queries » signifie seulement « rien n'est passé par `addSql()` », pas « rien ne s'est passé ». Ne jamais conclure de l'état réel d'une migration défensive à partir de ce seul message — se fier à `schema:validate` ou à une lecture directe d'`information_schema`.
+2. La colonne avait bien été créée par l'`ALTER TABLE customer ADD is_active TINYINT(1) NOT NULL DEFAULT 1` de la migration, mais avec une largeur d'affichage `(1)` et un `DEFAULT 1` que le mapping Doctrine de l'entité n'attend pas : `#[ORM\Column] private bool $isActive = true;` ne déclare aucune `options` de colonne, donc le SQL canonique attendu par Doctrine pour ce booléen est `TINYINT NOT NULL` — sans largeur ni `DEFAULT` (la valeur par défaut `true` n'existe que côté PHP, à la construction de l'entité ; comme toute création de `Customer` passe par l'ORM, un `DEFAULT` SQL n'est pas nécessaire). D'où le `CHANGE` (et non un `ADD`) proposé par `schema:update --dump-sql` : la colonne existe bel et bien, seule sa définition exacte diverge du mapping.
+
+**Correctif** : migration corrective dédiée (`Version20260708130000`), défensive (vérifie le type et le `DEFAULT` réels via `information_schema` avant d'agir, no-op si déjà normalisé) :
+```php
+$this->connection->executeStatement('ALTER TABLE customer CHANGE is_active is_active TINYINT NOT NULL');
+```
+Ne jamais lancer `doctrine:schema:update --force` pour « corriger vite » : ça applique le changement hors du suivi des migrations, contraire à la règle « nouvelle migration pour tout changement de schéma » (`CLAUDE.md`). `schema:update --dump-sql` reste un outil de **diagnostic** (il calcule le SQL exact attendu par le mapping) — jamais un outil de correction directe.
+
+**À vérifier après exécution** : `doctrine:schema:validate` doit passer entièrement au vert (mapping **et** base) une fois cette migration corrective jouée.
+
+---
+
 ## Séquence d'installation locale de référence (sans reset de base)
 
 > **Recopier des données de prod en local** : dumper/importer selon §9 (jamais le `>` de PowerShell), puis — si l'import a écrasé `doctrine_migration_versions` — réaligner le suivi selon §10 avant de relancer `migrations:migrate`, et réinsérer les seeds du lot en cours perdus (§11).

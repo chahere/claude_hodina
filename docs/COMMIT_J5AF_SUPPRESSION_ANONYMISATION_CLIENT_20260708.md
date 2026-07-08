@@ -8,6 +8,8 @@ Date : 2026-07-08
 fix(customer): la suppression pilote gere desormais les conversations IA
 feat(customer): anonymisation RGPD (nouvelle action admin + blocage connexion)
 docs(j5af): commit et README de mise à jour du lot
+fix(customer): migration corrective is_active (largeur/DEFAULT non conformes au mapping Doctrine)
+docs(j5af): documenter l'incident migration is_active (piège n°12)
 ```
 
 ## Tags
@@ -27,6 +29,7 @@ Corrige la suppression physique d'un client (« Supprimer pilote » dans EasyAdm
 
 **Anonymisation (nouveau)**
 - `migrations/Version20260708120000.php` : ajoute `customer.is_active` et `customer.anonymized_at` (idempotent, défensif).
+- `migrations/Version20260708130000.php` : corrective — normalise `customer.is_active` en `TINYINT NOT NULL` (sans largeur ni `DEFAULT`) pour correspondre exactement au mapping Doctrine ; trouvé via `doctrine:schema:validate` en test local, cf. `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §13.
 - `src/Entity/Customer.php` : champs `isActive`/`anonymizedAt` + accesseurs, `isAnonymized()`.
 - `src/Service/CustomerAnonymizerService.php` (nouveau) : scrub nom/prénom/téléphone/email/mot de passe/jeton reset, suppression des adresses, `isActive=false` + `anonymizedAt`.
 - `src/Security/CustomerUserChecker.php` (nouveau) : bloque la connexion des comptes `isActive=false`.

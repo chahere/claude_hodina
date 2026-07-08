@@ -91,6 +91,8 @@ Symptôme → cause → correctif. Détail complet dans `docs/NOTES_ENVIRONNEMEN
 
 11. **Action CRUD custom EasyAdmin (`linkToCrudAction`) : `AdminContext::getEntity()` peut lever « Cannot get entity outside of a CRUD context »** dès le premier appel de la méthode, même avec `crudAction`/`crudControllerFqcn`/`entityId` corrects dans l'URL — dépend de la version d'EasyAdminBundle réellement installée (sujette à dérive dans ce projet, cf. piège n°7). Ne jamais dépendre de `$context->getEntity()` dans une action custom : charger l'entité directement depuis `entityId` (query string) via l'`EntityManagerInterface`. Voir `CustomerCrudController::findCustomerFromRequest()`. Détail : NOTES §12.
 
+12. **Migration défensive affichant « 0 sql queries » alors que l'`ALTER` s'est bien exécuté, puis `schema:validate` rouge derrière** → le compteur de Doctrine Migrations ne suit que les instructions passées par `$this->addSql(...)` ; les migrations défensives de ce projet (conditionnelles, cf. `Version20260703093000`) exécutent leurs `ALTER` via `$this->connection->executeStatement(...)`, invisibles pour ce compteur — « 0 sql queries » ne veut pas dire « rien ne s'est passé ». Se fier à `schema:validate`/`information_schema`, jamais à ce seul message. Par ailleurs, une colonne booléenne créée en `TINYINT(1) NOT NULL DEFAULT 1` par `ALTER` brut ne correspond pas forcément au mapping Doctrine d'un simple `#[ORM\Column]` sans `options` (qui attend `TINYINT NOT NULL`, sans largeur ni `DEFAULT`) → `schema:update --dump-sql` propose alors un `CHANGE` : à transformer en migration corrective défensive, jamais en `schema:update --force`. Détail : NOTES §13.
+
 ## Assets / CSS
 
 - Un seul CSS public : `public/css/style_mobile.css` (fond blanc, `--bg: #ffffff`).
