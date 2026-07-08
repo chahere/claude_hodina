@@ -4295,3 +4295,77 @@ Le bouton "Continuer sur Messenger" reste masqué tant que le lien n'est pas ren
 recette-j5ae-widget-assistant-hodina-20260707
 prod-j5ae-widget-assistant-hodina-20260707
 ```
+
+# Déploiement 08/07/2026 — J5AF suppression pilote corrigée + anonymisation RGPD
+
+## Objet
+
+Corrige la suppression physique d'un client (« Supprimer pilote »), cassée depuis J5AD (`ChatbotConversation.customer` NOT NULL sans `ON DELETE`, non gérée par `CustomerPilotCascadeDeleter`). Ajoute l'anonymisation RGPD (nouvelle action admin « Anonymiser »). Détail : `docs/README_MAJ_J5AF_SUPPRESSION_ANONYMISATION_CLIENT_20260708.md`.
+
+Deux migrations : `Version20260708120000` (ajout `customer.is_active`/`customer.anonymized_at`) et `Version20260708130000` (migration corrective : normalise `is_active` en `TINYINT NOT NULL` pour correspondre au mapping Doctrine — voir `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §13).
+
+## Commande recette
+
+```bash
+PUBLIC_URL=https://recette.hodina.fr bash tools/deploy-hodina-by-tag.sh \
+  --project-dir ~/recette.hodina.fr \
+  --tag recette-j5af-suppression-anonymisation-client-20260708 \
+  --target recette
+```
+
+## Résultat recette (confirmé)
+
+Déploiement exécuté avec succès, sortie complète du script confirmée : migrations exécutées (2 migrations, « 0 sql queries » — comportement normal des migrations défensives de ce projet, voir NOTES §13, pas un signe d'échec), `doctrine:schema:validate` vert (mapping + base), assets EasyAdmin publiés, cache prod réchauffé, `git status` propre après checkout du tag, URL publique HTTP 200.
+
+## Tests fonctionnels recette (confirmés)
+
+Suppression pilote d'un client avec conversation IA existante : réussie (plusieurs clients de test supprimés). Anonymisation : scrub des données + blocage de connexion + conservation de l'historique métier confirmés.
+
+## Statut production
+
+Non déployé à ce jour.
+
+## Tags
+
+```text
+recette-j5af-suppression-anonymisation-client-20260708
+```
+
+# Déploiement 08/07/2026 — Correctif transverse AdminContext + J5AG (gestion logs SMS/e-mails)
+
+## Objet
+
+Deux concerns mergés sur `main` avant tag, déployés ensemble :
+
+- **Correctif `AdminContext::getEntity()`** (piège n°11) : 4 contrôleurs corrigés au total (`Customer` avec J5AF, puis `CustomerOrder`, `SupportTicket`, `CourierPayout` — le pattern `entityId` + `EntityManagerInterface` remplace partout la dépendance à `$context->getEntity()`). Détail : `CLAUDE.md` piège n°11, `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §12.
+- **J5AG** — gestion des logs SMS/e-mails (bouton « Vider les SMS logs », suppression unitaire/par lot + « Vider » pour EmailLog) et promotion de la checklist recette existante en checklist minimale permanente (voir § Checklist minimale en tête de ce document). Détail : `docs/README_MAJ_J5AG_GESTION_LOGS_SMS_EMAIL_20260708.md`.
+
+Aucune migration pour ces deux concerns.
+
+## Commande recette
+
+```bash
+PUBLIC_URL=https://recette.hodina.fr bash tools/deploy-hodina-by-tag.sh \
+  --project-dir ~/recette.hodina.fr \
+  --tag recette-j5ag-fix-admincontext-20260708 \
+  --target recette
+```
+
+## Résultat recette
+
+**Non confirmé par une sortie de script à ce stade.** Le tag a été créé (localement, vérifié par `git rev-parse` avant push) et poussé avec succès sur `origin` — confirmé. L'exécution réelle du script de déploiement recette pour ce tag précis n'a pas été montrée dans cette session : à vérifier avant de considérer ce lot validé recette (dérouler la checklist minimale en premier).
+
+## Tests fonctionnels (confirmés en local, hodina.fr)
+
+Validation de commande (« Valider + SMS ») testée avec succès après correctif — reproduisait un 500 avant correction. Gestion des logs SMS/e-mails testée en local (bouton vider, confirmation, compteur, suppression unitaire/par lot EmailLog).
+
+## Statut production
+
+Non déployé à ce jour.
+
+## Tags
+
+```text
+recette-j5ag-fix-admincontext-20260708
+recette-j5ag-gestion-logs-sms-email-20260708
+```

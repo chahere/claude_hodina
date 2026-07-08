@@ -3339,3 +3339,64 @@ Tags : `recette-j5aa-address-locality-20260704`, `prod-j5aa-address-locality-202
 # 2026-07-05 — Réalignement documentaire post-J5AA
 
 Correction d’une incohérence : plusieurs fichiers de suivi indiquaient encore « J5AA prévu / non codé / non recette / non production » alors que J5AA était déployé en production depuis le 2026-07-04. Fichiers corrigés : `TODO.md`, `PILOT_STATUS_DETAILED.md`, `DEPLOIEMENT_PREPROD.md`, `HISTORIQUE.md`, et annotation des sections de planification supersédées dans `ARCHITECTURE.md`, `ENTITIES.md`, `WORKFLOWS.md`. Ajout du fichier racine `CLAUDE.md` (guide de travail pour l’assistant, dont la procédure de mise à jour docs).
+
+# 2026-07-06/07 — J5AD (chatbot IA client + support) et J5AE (widget Assistant Hodina)
+
+Deux lots développés et validés avant la période de travail documentée ci-dessous :
+
+- **J5AD** — chatbot IA pour les clients connectés (`/mon-compte/assistant`), avec escalade automatique vers un ticket support humain (`SupportTicket`, origine `CHATBOT_ESCALATION`), formulaire de contact public (`/contact`), réglages LLM administrables sans redéploiement (`AiChatbotSetting`, clé API chiffrée AES-256-GCM), flag d'activation `HodinaSetting::KEY_AI_CHATBOT_ENABLED`. Détail : `docs/README_MAJ_J5AD_CHATBOT_IA_SUPPORT_CLIENT_20260706.md`.
+- **J5AE** — widget conversationnel flottant « Assistant Hodina » (moteur à règles, sans IA), disponible sur tout le site public pour visiteurs anonymes et clients connectés, escalade vers `SupportTicket` (origine `CHAT_WIDGET`). Détail : `docs/README_MAJ_J5AE_WIDGET_ASSISTANT_HODINA_20260707.md`.
+
+Portés depuis le dépôt de travail `chahere/claude_hodina` vers `chahere/hodina` (les deux dépôts ont des historiques Git sans ancêtre commun — portage par diff + apply, pas par merge). Déployés recette avec succès (tag `recette-j5ad-j5ae-assistant-hodina-20260708c`, tous les contrôles automatiques du script de déploiement au vert). **Statut production non confirmé à ce jour** — à vérifier avant de le considérer acquis.
+
+# 2026-07-08 — J5AF : suppression pilote corrigée + anonymisation RGPD
+
+## Bug corrigé
+
+La suppression physique d'un client (« Supprimer pilote » dans EasyAdmin) était cassée depuis J5AD : la migration `Version20260706120000` avait créé `chatbot_conversation.customer_id` en `NOT NULL` **sans clause `ON DELETE`** (RESTRICT par défaut MariaDB/InnoDB), contrairement à `support_ticket.customer_id` (nullable, `SET NULL`) créée dans la même migration. `CustomerPilotCascadeDeleter` n'avait jamais été mis à jour pour cette nouvelle relation — d'où un 500 systématique dès qu'un client avait échangé au moins une fois avec l'assistant IA.
+
+Corrigé : `CustomerPilotCascadeDeleter` supprime désormais aussi les `ChatbotConversation` du client avant lui (les `ChatbotMessage` liés partent automatiquement, `ON DELETE CASCADE` déjà en place).
+
+## Anonymisation RGPD (nouveau)
+
+Nouvelle action admin « Anonymiser », alternative recommandée à « Supprimer pilote » pour un vrai client : scrub des données personnelles (nom, prénom, téléphone, email, mot de passe), suppression des adresses, blocage de connexion (`Customer.isActive = false`, `anonymizedAt` renseigné), conservation intégrale de l'historique métier (commandes, tickets support, conversations IA, paiements livreur). Blocage de connexion via `CustomerUserChecker` (mécanisme standard Symfony `UserCheckerInterface`), câblé sur le firewall `main`.
+
+Migrations `Version20260708120000` (ajout `customer.is_active`/`customer.anonymized_at`) puis `Version20260708130000` (migration corrective : le premier `ALTER` avait créé `is_active` en `TINYINT(1) NOT NULL DEFAULT 1`, ne correspondant pas exactement au mapping Doctrine `#[ORM\Column]` sans `options`, qui attend `TINYINT NOT NULL` sans largeur ni défaut — `schema:validate` restait rouge sinon).
+
+## Incident détecté en test réel
+
+Un premier correctif livré sans avoir pu être exécuté (contrainte du sandbox Claude Code, pas de `bin/console`) a cassé au premier clic réel : `AdminContext::getEntity()` levait `Cannot get entity outside of a CRUD context` dans `CustomerCrudController`. Root cause confirmée par capture d'écran du code vendor réel. Corrigé en chargeant l'entité directement via `entityId` (query string) + `EntityManagerInterface`, sans dépendre du contexte CRUD d'EasyAdmin. Documenté comme piège n°11 (`CLAUDE.md`, `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §12).
+
+Détail complet : `docs/README_MAJ_J5AF_SUPPRESSION_ANONYMISATION_CLIENT_20260708.md`, `docs/COMMIT_J5AF_SUPPRESSION_ANONYMISATION_CLIENT_20260708.md`.
+
+**Validation** : testé en conditions réelles sur `D:\hodina\hodina.fr` (suppression pilote, anonymisation, blocage connexion). Déployé recette avec succès (tag `recette-j5af-suppression-anonymisation-client-20260708`, sortie complète du script de déploiement confirmée : migrations, `schema:validate`, assets, cache, tous verts). **Non encore déployé en production.**
+
+# 2026-07-08 — Correctif transverse `AdminContext::getEntity()` (piège n°11)
+
+En testant le workflow de validation de commande admin (« Valider + SMS »), le même piège que sur `Customer` (ci-dessus) est réapparu sur `CustomerOrderCrudController` : 6 méthodes dépendaient de `$context->getEntity()` (`operationalSheet`, `logisticsDetails`, `sendSms`, et les 5 actions de workflow partageant `applyWorkflowAction` : confirmer/annuler/préparer/prête/livrée).
+
+Une recherche systématique (`grep -rn "AdminContext \$context" src/Controller/Admin/`) a trouvé 2 autres contrôleurs avec le même pattern fragile, pas encore cassés au clic : `SupportTicketCrudController` (Répondre/Clôturer) et `CourierPayoutCrudController` (Valider/Marquer payé/Annuler paiement livreur). Les deux ont été corrigés préventivement avec le même correctif. Grep final : zéro occurrence restante dans `src/Controller/Admin/`.
+
+Testé en conditions réelles sur `D:\hodina\hodina.fr` (Valider + SMS sur une commande en attente). Tag combiné avec J5AG (voir ci-dessous) : `recette-j5ag-fix-admincontext-20260708`, créé et poussé. **Exécution du déploiement recette non confirmée par une sortie de script à ce stade** — à vérifier avant de considérer ce correctif validé recette.
+
+# 2026-07-08 — J5AG : gestion des logs SMS / e-mails + checklist minimale
+
+## Fonctionnalité
+
+- **SmsLog** : nouveau bouton « Vider les SMS logs » (suppression totale, écran de confirmation avec compteur exact, action CSRF-protégée).
+- **EmailLog** : suppression unitaire et par lot réactivées (étaient désactivées depuis l'origine) ; bouton « Vider les journaux e-mails », même mécanique que SmsLog.
+- Journaux techniques sans impact sur les commandes/clients (clé étrangère déjà `nullable, ON DELETE SET NULL` vers `CustomerOrder`).
+
+Détail complet : `docs/README_MAJ_J5AG_GESTION_LOGS_SMS_EMAIL_20260708.md`, `docs/COMMIT_J5AG_GESTION_LOGS_SMS_EMAIL_20260708.md`.
+
+## Checklist minimale (nouvelle règle process)
+
+À la demande explicite de l'utilisateur, la checklist recette existante (`docs/DEPLOIEMENT_PREPROD.md`) a été promue en règle permanente : dérouler systématiquement catalogue/inscription/connexion d'un client existant/panier/checkout/commande/backoffice/portail livreur **avant** toute checklist spécifique à un lot déployé, et ne pas continuer si un point échoue. Référencée dans `CLAUDE.md` § Règles non négociables.
+
+**Validation** : testé en conditions réelles sur `D:\hodina\hodina.fr`. Tag `recette-j5ag-gestion-logs-sms-email-20260708` créé et poussé. **Exécution du déploiement recette non confirmée par une sortie de script à ce stade.** Non encore déployé en production.
+
+# 2026-07-08 — Fusion des deux `CLAUDE.md` (claude_hodina + hodina.fr) et fin de la session à deux dépôts
+
+Les deux dépôts avaient chacun leur propre `CLAUDE.md`, écrits indépendamment et jamais synchronisés : celui de `hodina.fr` était axé architecture/domaine métier (services, pattern freeze-at-checkout, logistique PT/GT/barge, authentification/rôles), celui de `claude_hodina` était axé process et pièges d'environnement (12 pièges numérotés, discipline git/tests). Fusionnés en un seul fichier conservant le contenu des deux, poussé sur `main` des deux dépôts.
+
+**Décision de fin de session** : à partir de cette date, le travail Claude Code sur Hodina se poursuit directement sur `D:\hodina\hodina.fr` avec le dépôt `chahere/hodina`, en local (Windows, `vendor/`/`.env`/`bin/console` réels). La session combinant `chahere/claude_hodina` (sandbox cloud, portage manuel par patch à chaque lot) et `chahere/hodina` est close, jugée source de confusion. `CLAUDE.md`/`SKILL.md` désormais fusionnés et à jour permettent à une nouvelle session locale de retrouver directement tout le contexte process + architecture sans portage manuel.

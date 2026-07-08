@@ -5685,4 +5685,42 @@ Le seed `hodina:address-localities:seed` ne doit pas se limiter à Mamoudzou. Il
 
 Le champ `Localité` reste facultatif. Il propose désormais des suggestions visibles sous le champ, plus fiables qu’un simple `datalist` navigateur sur mobile. Quand le client sélectionne une localité connue, Hodina préremplit le code postal et la commune associée, puis conserve la validation serveur stricte `postalCode + Address.commune`.
 
+# Décisions J5AF — Suppression pilote et anonymisation
+
+## Deux actions distinctes pour deux usages
+
+« Supprimer pilote » reste une suppression physique en cascade, réservée au nettoyage des comptes de test de la phase pilote. « Anonymiser » est la voie recommandée pour un vrai client demandant la suppression de ses données : scrub des données personnelles, blocage de connexion, conservation intégrale de l'historique métier (commandes, tickets support, conversations IA, paiements livreur).
+
+Raison : un vrai client a un historique métier qu'il n'est pas souhaitable de perdre (comptabilité, traçabilité support), alors qu'un compte de test pilote n'a pas cette contrainte.
+
+## Correction de la suppression pilote par le code, pas par le schéma
+
+Pas de nouvelle contrainte `ON DELETE CASCADE` sur `chatbot_conversation.customer_id` : la suppression explicite des conversations IA en PHP (`CustomerPilotCascadeDeleter`) suit le même principe déjà appliqué aux commandes et adresses dans ce service, sans toucher à une contrainte déjà déployée en recette.
+
+## Blocage de connexion via le mécanisme standard Symfony
+
+Le blocage des comptes anonymisés (`Customer.isActive = false`) passe par `UserCheckerInterface` (`CustomerUserChecker`), invoqué automatiquement par le firewall — pas de logique ad hoc dans `AppAuthenticator`.
+
+# Décision transverse — Piège `AdminContext::getEntity()`
+
+## Ne jamais dépendre du contexte CRUD EasyAdmin dans une action custom
+
+Toute action CRUD custom EasyAdmin (`linkToCrudAction`) doit charger son entité directement via `entityId` (query string) + `EntityManagerInterface`, jamais via `$context->getEntity()`. Raison : ce mécanisme peut lever `LogicException: Cannot get entity outside of a CRUD context` selon la version d'EasyAdminBundle réellement installée, y compris avec une URL correctement formée — confirmé sur 4 contrôleurs (`Customer`, `CustomerOrder`, `SupportTicket`, `CourierPayout`) à ce jour. Une recherche `grep -rn "AdminContext \$context" src/Controller/Admin/` doit être relancée après toute correction de ce type pour vérifier qu'aucune occurrence ne subsiste.
+
+# Décisions J5AG — Gestion des logs SMS / e-mails
+
+## Suppression réelle en base, pas d'archivage
+
+`SmsLog` et `EmailLog` sont des journaux techniques (traçabilité des envois), sans obligation de conservation identifiée pour ce projet à ce stade. Le bouton « vider » supprime réellement les lignes (`DELETE FROM` DQL), avec confirmation et compteur affichés avant toute suppression totale — pas d'archivage ni de purge automatique programmée pour cette itération.
+
+# Décision process — Checklist minimale avant toute checklist de lot
+
+Avant de dérouler la checklist spécifique à un lot déployé (recette ou production), dérouler d'abord la checklist minimale : catalogue, inscription, connexion d'un client existant, panier/checkout/commande, backoffice, portail livreur. Ne pas continuer sur les tests du lot si un point de cette checklist échoue.
+
+Raison : un lot qui touche `Customer`, la sécurité ou EasyAdmin peut casser la connexion de tous les clients, pas seulement le cas spécifique visé par le lot — un incident réel (piège `AdminContext`) a montré qu'un test scopé au seul lot peut manquer une régression transverse.
+
+# Décision — Fusion des CLAUDE.md et fin de la session à deux dépôts
+
+Les deux `CLAUDE.md` (`claude_hodina` et `hodina.fr`), écrits indépendamment et jamais synchronisés, ont été fusionnés en un seul fichier après identification d'une confusion réelle entre les deux (l'un axé process/pièges, l'autre axé architecture/domaine — aucun des deux n'était complet seul). Décision de mettre fin au travail combiné sur deux dépôts (sandbox `claude_hodina` + portage manuel vers `hodina`) : le développement se poursuit directement sur `D:\hodina\hodina.fr` avec `chahere/hodina`, jugé plus simple et moins sujet à erreur qu'un portage par patch à chaque lot.
+
 Cette évolution ne change pas la source de calcul logistique : `Address.commune` reste central, validé par `DeliveryCommune`. La localité aide à préciser l’adresse, mais ne calcule jamais les frais, la barge, les jours ou les créneaux.
