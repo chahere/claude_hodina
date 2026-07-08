@@ -72,6 +72,7 @@ final class AiChatbotSettingCrudController extends AbstractCrudController
     {
         return $actions
             ->disable(Action::NEW, Action::DELETE, Action::BATCH_DELETE)
+            ->add(Crud::PAGE_EDIT, Action::INDEX)
             ->update(Crud::PAGE_EDIT, Action::SAVE_AND_RETURN, fn (Action $action): Action => $action->setLabel('Enregistrer'))
             ->update(Crud::PAGE_EDIT, Action::INDEX, fn (Action $action): Action => $action->setLabel('Retour au tableau de bord'));
     }
