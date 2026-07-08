@@ -9,7 +9,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
@@ -81,9 +80,9 @@ final class SupportTicketCrudController extends AbstractCrudController
         yield DateTimeField::new('closedAt', 'Clôturé le')->hideOnForm()->onlyOnDetail();
     }
 
-    public function reply(AdminContext $context, Request $request, AdminUrlGenerator $adminUrlGenerator, EntityManagerInterface $entityManager): Response
+    public function reply(Request $request, AdminUrlGenerator $adminUrlGenerator, EntityManagerInterface $entityManager): Response
     {
-        $ticket = $context->getEntity()->getInstance();
+        $ticket = $this->findTicketFromRequest($request, $entityManager);
 
         if (!$ticket instanceof SupportTicket) {
             $this->addFlash('danger', 'Ticket introuvable.');
@@ -143,9 +142,9 @@ final class SupportTicketCrudController extends AbstractCrudController
         ]);
     }
 
-    public function close(AdminContext $context, Request $request, AdminUrlGenerator $adminUrlGenerator, EntityManagerInterface $entityManager): Response
+    public function close(Request $request, AdminUrlGenerator $adminUrlGenerator, EntityManagerInterface $entityManager): Response
     {
-        $ticket = $context->getEntity()->getInstance();
+        $ticket = $this->findTicketFromRequest($request, $entityManager);
 
         if (!$ticket instanceof SupportTicket) {
             $this->addFlash('danger', 'Ticket introuvable.');
@@ -180,6 +179,25 @@ final class SupportTicketCrudController extends AbstractCrudController
                 'detail' => $this->buildTicketCrudUrl($adminUrlGenerator, $ticket, Action::DETAIL),
             ],
         ]);
+    }
+
+    /**
+     * Charge le ticket directement via entityId (query string), sans dépendre du
+     * contexte CRUD d'EasyAdmin : AdminContext::getEntity() peut lever
+     * "Cannot get entity outside of a CRUD context" sur certaines actions custom
+     * selon la version d'EasyAdminBundle installée.
+     */
+    private function findTicketFromRequest(Request $request, EntityManagerInterface $entityManager): ?SupportTicket
+    {
+        $entityId = $request->query->get('entityId');
+
+        if ($entityId === null || $entityId === '') {
+            return null;
+        }
+
+        $ticket = $entityManager->getRepository(SupportTicket::class)->find($entityId);
+
+        return $ticket instanceof SupportTicket ? $ticket : null;
     }
 
     private function buildTicketCrudUrl(AdminUrlGenerator $adminUrlGenerator, SupportTicket $ticket, string $action): string
