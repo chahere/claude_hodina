@@ -311,6 +311,8 @@ Remplace `AdminContext $context` par `EntityManagerInterface $entityManager` dan
 
 **Non détecté avant livraison** : ce bug n'a pas pu être repéré par relecture de code dans le sandbox Claude Code (pas de `vendor/`, pas de serveur, impossible d'exécuter réellement une action EasyAdmin). Cf. règle ajoutée dans `CLAUDE.md` § Règles non négociables : dire explicitement quand un correctif EasyAdmin/Symfony n'a pas pu être exécuté en conditions réelles, plutôt que de donner des commandes de test comme si c'était déjà validé.
 
+**Mise à jour 2026-07-08** : le même piège est réapparu en test réel sur `CustomerOrderCrudController` (bouton « Valider + SMS », `confirmOrder()` → `applyWorkflowAction()`), touchant en réalité **6 méthodes** de ce contrôleur (`operationalSheet`, `logisticsDetails`, `sendSms`, et les 5 actions de workflow qui partagent `applyWorkflowAction`). Une recherche `grep "AdminContext \$context"` sur tout `src/Controller/Admin/` a montré que 2 autres contrôleurs utilisaient exactement le même pattern fragile, sans avoir encore planté : `SupportTicketCrudController` (`reply`, `close`) et `CourierPayoutCrudController` (`validatePayout`, `markPaid`, `cancelPayout`). Les 3 ont été corrigés préventivement avec le même correctif (`entityId` + `EntityManagerInterface`, sans dépendre d'`AdminContext`), plutôt que d'attendre que chacun casse au clic. Après toute correction de ce piège sur un contrôleur, relancer `grep -rn "AdminContext \$context" src/Controller/Admin/` pour vérifier qu'aucune occurrence ne subsiste ailleurs dans le projet.
+
 ---
 
 ## 13. Migration défensive « 0 sql queries » + `schema:validate` rouge sur une colonne pourtant créée
