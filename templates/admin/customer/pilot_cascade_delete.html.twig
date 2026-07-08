@@ -79,8 +79,10 @@
             <strong>Suppression physique en cascade.</strong>
             <p class="mb-0 mt-2">
                 Cette action supprime définitivement l’utilisateur, ses commandes, les lignes de commande,
-                les SMS logs liés aux commandes et ses adresses de livraison. Elle est volontairement prévue
-                uniquement pour nettoyer les tests du pilote.
+                les SMS logs liés aux commandes, ses adresses et ses conversations avec l'assistant IA.
+                Si ce compte est aussi livreur, ses paiements livreur sont supprimés automatiquement avec lui.
+                Les tickets support liés restent conservés (juste détachés du client). Elle est volontairement
+                prévue uniquement pour nettoyer les tests du pilote — pour un vrai client, préférer l'anonymisation.
             </p>
         </div>
 
@@ -97,6 +99,14 @@
             <div class="hodina-summary-item">
                 <span class="hodina-summary-number">{{ preview.addresses }}</span>
                 adresse(s)
+            </div>
+            <div class="hodina-summary-item">
+                <span class="hodina-summary-number">{{ preview.chatbotConversations }}</span>
+                conversation(s) IA
+            </div>
+            <div class="hodina-summary-item">
+                <span class="hodina-summary-number">{{ preview.courierPayouts }}</span>
+                paiement(s) livreur
             </div>
         </div>
 
