@@ -4,13 +4,13 @@ namespace App\Controller\Admin;
 
 use App\Entity\Customer;
 use App\Entity\SmsLog;
+use App\Service\CustomerAnonymizerService;
 use App\Service\CustomerPilotCascadeDeleter;
 
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
@@ -94,6 +94,12 @@ class CustomerCrudController extends AbstractCrudController
             ->renderExpanded(false)
             ->setHelp('Sélectionne un ou plusieurs rôles. ROLE_USER est ajouté automatiquement. ROLE_COMMERCE_TESTER permet de tester panier et commande même si les commandes publiques sont bloquées.');
         yield BooleanField::new('isVerified');
+        yield BooleanField::new('isActive', 'Compte actif')
+            ->setHelp('Passe automatiquement à faux lors de l’anonymisation. Ne pas modifier manuellement.')
+            ->hideOnForm();
+        yield DateTimeField::new('anonymizedAt', 'Anonymisé le')
+            ->hideOnForm()
+            ->hideOnIndex();
 
         yield NumberField::new('courierPayoutCap', 'Plafond rémunération livreur (€)')
             ->setNumDecimals(2)
@@ -112,6 +118,13 @@ class CustomerCrudController extends AbstractCrudController
                 return !in_array('ROLE_ADMIN', $customer->getRoles(), true);
             });
 
+        $anonymize = Action::new('confirmAnonymize', 'Anonymiser', 'fa fa-user-secret')
+            ->linkToCrudAction('confirmAnonymize')
+            ->setCssClass('btn btn-warning')
+            ->displayIf(static function (Customer $customer): bool {
+                return !in_array('ROLE_ADMIN', $customer->getRoles(), true) && !$customer->isAnonymized();
+            });
+
         $generateResetLink = Action::new('generatePasswordResetLink', 'Lien reset', 'fa fa-key')
             ->linkToCrudAction('generatePasswordResetLink')
             ->setCssClass('btn btn-secondary')
@@ -122,6 +135,8 @@ class CustomerCrudController extends AbstractCrudController
         return $actions
             ->add(Crud::PAGE_INDEX, $generateResetLink)
             ->add(Crud::PAGE_DETAIL, $generateResetLink)
+            ->add(Crud::PAGE_INDEX, $anonymize)
+            ->add(Crud::PAGE_DETAIL, $anonymize)
             ->add(Crud::PAGE_INDEX, $deletePilot)
             ->add(Crud::PAGE_DETAIL, $deletePilot)
             ->disable(Action::DELETE)
@@ -152,11 +167,11 @@ class CustomerCrudController extends AbstractCrudController
     }
 
     public function generatePasswordResetLink(
-        AdminContext $context,
+        Request $request,
         EntityManagerInterface $entityManager,
         AdminUrlGenerator $adminUrlGenerator,
     ): Response {
-        $customer = $context->getEntity()?->getInstance();
+        $customer = $this->findCustomerFromRequest($request, $entityManager);
 
         if (!$customer instanceof Customer) {
             throw $this->createNotFoundException('Utilisateur introuvable.');
@@ -232,12 +247,12 @@ class CustomerCrudController extends AbstractCrudController
     }
 
     public function confirmPilotCascadeDelete(
-        AdminContext $context,
         Request $request,
+        EntityManagerInterface $entityManager,
         CustomerPilotCascadeDeleter $customerPilotCascadeDeleter,
         AdminUrlGenerator $adminUrlGenerator,
     ): Response {
-        $customer = $context->getEntity()?->getInstance();
+        $customer = $this->findCustomerFromRequest($request, $entityManager);
 
         if (!$customer instanceof Customer) {
             throw $this->createNotFoundException('Client introuvable.');
@@ -267,11 +282,13 @@ class CustomerCrudController extends AbstractCrudController
             $summary = $customerPilotCascadeDeleter->delete($customer);
 
             $this->addFlash('success', sprintf(
-                'Client pilote #%d supprimé : %d commande(s), %d SMS log(s), %d adresse(s).',
+                'Client pilote #%d supprimé : %d commande(s), %d SMS log(s), %d adresse(s), %d conversation(s) IA, %d paiement(s) livreur.',
                 $customerId,
                 $summary['orders'],
                 $summary['smsLogs'],
-                $summary['addresses']
+                $summary['addresses'],
+                $summary['chatbotConversations'],
+                $summary['courierPayouts']
             ));
 
             return $this->redirect($this->buildCustomerIndexUrl($adminUrlGenerator));
@@ -282,6 +299,80 @@ class CustomerCrudController extends AbstractCrudController
             'preview' => $preview,
             'cancelUrl' => $this->buildCustomerDetailUrl($adminUrlGenerator, $customer),
         ]);
+    }
+
+    public function confirmAnonymize(
+        Request $request,
+        EntityManagerInterface $entityManager,
+        CustomerAnonymizerService $customerAnonymizerService,
+        AdminUrlGenerator $adminUrlGenerator,
+    ): Response {
+        $customer = $this->findCustomerFromRequest($request, $entityManager);
+
+        if (!$customer instanceof Customer) {
+            throw $this->createNotFoundException('Client introuvable.');
+        }
+
+        if (in_array('ROLE_ADMIN', $customer->getRoles(), true)) {
+            $this->addFlash('danger', 'Impossible d’anonymiser un compte administrateur.');
+            return $this->redirect($this->buildCustomerDetailUrl($adminUrlGenerator, $customer));
+        }
+
+        $currentUser = $this->getUser();
+        if ($currentUser instanceof Customer && $currentUser->getId() === $customer->getId()) {
+            $this->addFlash('danger', 'Impossible d’anonymiser ton propre compte connecté.');
+            return $this->redirect($this->buildCustomerDetailUrl($adminUrlGenerator, $customer));
+        }
+
+        if ($customer->isAnonymized()) {
+            $this->addFlash('danger', 'Ce client est déjà anonymisé.');
+            return $this->redirect($this->buildCustomerDetailUrl($adminUrlGenerator, $customer));
+        }
+
+        $preview = $customerAnonymizerService->preview($customer);
+
+        if ($request->isMethod('POST')) {
+            $token = (string) $request->request->get('_token');
+            if (!$this->isCsrfTokenValid('anonymize_customer_' . $customer->getId(), $token)) {
+                throw $this->createAccessDeniedException('Jeton CSRF invalide.');
+            }
+
+            $customerId = $customer->getId();
+            $summary = $customerAnonymizerService->anonymize($customer);
+
+            $this->addFlash('success', sprintf(
+                'Client #%d anonymisé : %d adresse(s) supprimée(s). Commandes, tickets support et conversations IA conservés.',
+                $customerId,
+                $summary['addresses']
+            ));
+
+            return $this->redirect($this->buildCustomerIndexUrl($adminUrlGenerator));
+        }
+
+        return $this->render('admin/customer/anonymize_confirm.html.twig', [
+            'customer' => $customer,
+            'preview' => $preview,
+            'cancelUrl' => $this->buildCustomerDetailUrl($adminUrlGenerator, $customer),
+        ]);
+    }
+
+    /**
+     * Charge le client directement via entityId (query string), sans dépendre du
+     * contexte CRUD d'EasyAdmin : AdminContext::getEntity() peut lever
+     * "Cannot get entity outside of a CRUD context" sur certaines actions custom
+     * selon la version d'EasyAdminBundle installée.
+     */
+    private function findCustomerFromRequest(Request $request, EntityManagerInterface $entityManager): ?Customer
+    {
+        $entityId = $request->query->get('entityId');
+
+        if ($entityId === null || $entityId === '') {
+            return null;
+        }
+
+        $customer = $entityManager->getRepository(Customer::class)->find($entityId);
+
+        return $customer instanceof Customer ? $customer : null;
     }
 
     private function buildCustomerDetailUrl(AdminUrlGenerator $adminUrlGenerator, Customer $customer): string

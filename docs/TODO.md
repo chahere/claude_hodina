@@ -1044,3 +1044,61 @@ Statut : livré, validé recette + production 2026-07-04 (`prod-j5aa-address-loc
 - [x] Vérifier les affichages client/admin/Djama avant recette.
 
 Hors périmètre J5AA-A : `Address.deliveryCommune`, tarification par localité, tarification par code postal, Google Maps/API externe.
+
+# État après J5AF / correctif AdminContext / J5AG (08/07/2026)
+
+## J5AD — Chatbot IA client + support
+
+Statut : validé recette (tag `recette-j5ad-j5ae-assistant-hodina-20260708c`). Statut production non confirmé.
+
+- [x] Chatbot IA connecté `/mon-compte/assistant`, escalade vers ticket support.
+- [x] Formulaire de contact public `/contact`.
+- [x] Réglages LLM administrables (`AiChatbotSetting`), clé API chiffrée.
+- [ ] Confirmer le statut production.
+
+## J5AE — Widget Assistant Hodina
+
+Statut : validé recette (même tag que J5AD). Statut production non confirmé.
+
+- [x] Widget flottant sur tout le site public, moteur à règles.
+- [x] Escalade vers ticket support (origine `CHAT_WIDGET`).
+- [ ] Confirmer le statut production.
+
+## J5AF — Suppression pilote corrigée + anonymisation RGPD
+
+Statut : validé recette (tag `recette-j5af-suppression-anonymisation-client-20260708`, sortie de script confirmée). **Non déployé production.**
+
+- [x] Suppression pilote : gère désormais les conversations IA (`ChatbotConversation`).
+- [x] Anonymisation RGPD : nouvelle action admin, scrub données + blocage connexion + conservation historique.
+- [x] Migrations `Version20260708120000` / `Version20260708130000`.
+- [ ] Déploiement production.
+
+## Correctif transverse — `AdminContext::getEntity()` (piège n°11)
+
+Statut : testé localement sur hodina.fr. Tag `recette-j5ag-fix-admincontext-20260708` créé et poussé — **déploiement recette à confirmer** (pas de sortie de script vue).
+
+- [x] `CustomerOrderCrudController` (6 méthodes), `SupportTicketCrudController`, `CourierPayoutCrudController` corrigés.
+- [x] Grep de vérification sur tout `src/Controller/Admin/` : zéro occurrence restante.
+- [ ] Confirmer le déploiement recette réel (sortie de script).
+- [ ] Déploiement production.
+
+## J5AG — Gestion des logs SMS / e-mails + checklist minimale
+
+Statut : testé localement sur hodina.fr. Tag `recette-j5ag-gestion-logs-sms-email-20260708` créé et poussé — **déploiement recette à confirmer**.
+
+- [x] Bouton « Vider les SMS logs ».
+- [x] Suppression unitaire/par lot EmailLog + bouton « Vider les journaux e-mails ».
+- [x] Checklist minimale documentée (`docs/DEPLOIEMENT_PREPROD.md`), référencée dans `CLAUDE.md`.
+- [ ] Confirmer le déploiement recette réel (sortie de script).
+- [ ] Déploiement production.
+
+## Documentation
+
+- [x] `CLAUDE.md` fusionné (claude_hodina + hodina.fr) — architecture/domaine + process/pièges dans un seul fichier, synchronisé sur les deux dépôts.
+
+## Prochaines priorités recommandées
+
+- [ ] Confirmer en recette (sortie de script + checklist minimale) le correctif AdminContext et J5AG avant de les tagger production.
+- [ ] Confirmer le statut production réel de J5AD/J5AE.
+- [ ] Après validation recette complète : tag production, déploiement production.
+- [ ] Poursuivre le développement directement sur `D:\hodina\hodina.fr` / `chahere/hodina` (fin du travail combiné avec le dépôt sandbox `chahere/claude_hodina`).

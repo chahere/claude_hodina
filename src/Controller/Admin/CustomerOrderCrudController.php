@@ -10,10 +10,10 @@ use App\Service\DeliveryLogisticsService;
 use App\Service\OrderReferenceGenerator;
 use App\Service\Sms\OrderSmsMessageBuilder;
 use App\Service\Sms\SmsService;
+use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
@@ -218,9 +218,9 @@ class CustomerOrderCrudController extends AbstractCrudController
             ->onlyOnDetail();
     }
 
-    public function operationalSheet(AdminContext $context, AdminUrlGenerator $adminUrlGenerator): Response
+    public function operationalSheet(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator): Response
     {
-        $order = $context->getEntity()->getInstance();
+        $order = $this->findOrderFromRequest($request, $entityManager);
 
         if (!$order instanceof CustomerOrder) {
             $this->addFlash('danger', 'Commande introuvable.');
@@ -245,11 +245,12 @@ class CustomerOrderCrudController extends AbstractCrudController
     }
 
     public function logisticsDetails(
-        AdminContext $context,
+        Request $request,
+        EntityManagerInterface $entityManager,
         AdminUrlGenerator $adminUrlGenerator,
         DeliveryLogisticsService $deliveryLogisticsService,
     ): Response {
-        $order = $context->getEntity()->getInstance();
+        $order = $this->findOrderFromRequest($request, $entityManager);
 
         if (!$order instanceof CustomerOrder) {
             $this->addFlash('danger', 'Commande introuvable.');
@@ -281,14 +282,14 @@ class CustomerOrderCrudController extends AbstractCrudController
     }
 
     public function sendSms(
-        AdminContext $context,
         Request $request,
+        EntityManagerInterface $entityManager,
         AdminUrlGenerator $adminUrlGenerator,
         OrderReferenceGenerator $orderReferenceGenerator,
         OrderSmsMessageBuilder $messageBuilder,
         SmsService $smsService
     ): Response {
-        $order = $context->getEntity()->getInstance();
+        $order = $this->findOrderFromRequest($request, $entityManager);
 
         if (!$order instanceof CustomerOrder) {
             $this->addFlash('danger', 'Commande introuvable.');
@@ -353,50 +354,55 @@ class CustomerOrderCrudController extends AbstractCrudController
         ]);
     }
 
-    public function confirmOrder(AdminContext $context, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
+    public function confirmOrder(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
     {
         return $this->applyWorkflowAction(
-            $context,
+            $request,
+            $entityManager,
             $adminUrlGenerator,
             fn (CustomerOrder $order): SmsLog => $workflow->confirm($order),
             'Commande validée.'
         );
     }
 
-    public function cancelOrder(AdminContext $context, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
+    public function cancelOrder(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
     {
         return $this->applyWorkflowAction(
-            $context,
+            $request,
+            $entityManager,
             $adminUrlGenerator,
             fn (CustomerOrder $order): SmsLog => $workflow->cancel($order),
             'Commande annulée.'
         );
     }
 
-    public function prepareOrder(AdminContext $context, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
+    public function prepareOrder(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
     {
         return $this->applyWorkflowAction(
-            $context,
+            $request,
+            $entityManager,
             $adminUrlGenerator,
             fn (CustomerOrder $order): SmsLog => $workflow->markPreparing($order),
             'Commande passée en préparation.'
         );
     }
 
-    public function markReady(AdminContext $context, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
+    public function markReady(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
     {
         return $this->applyWorkflowAction(
-            $context,
+            $request,
+            $entityManager,
             $adminUrlGenerator,
             fn (CustomerOrder $order): SmsLog => $workflow->markReady($order),
             'Commande marquée comme prête.'
         );
     }
 
-    public function markDelivered(AdminContext $context, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
+    public function markDelivered(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator, CustomerOrderWorkflowService $workflow): Response
     {
         return $this->applyWorkflowAction(
-            $context,
+            $request,
+            $entityManager,
             $adminUrlGenerator,
             fn (CustomerOrder $order): SmsLog => $workflow->markDeliveredByAdmin($order),
             'Commande marquée comme livrée.'
@@ -407,12 +413,13 @@ class CustomerOrderCrudController extends AbstractCrudController
      * @param callable(CustomerOrder): SmsLog $workflowAction
      */
     private function applyWorkflowAction(
-        AdminContext $context,
+        Request $request,
+        EntityManagerInterface $entityManager,
         AdminUrlGenerator $adminUrlGenerator,
         callable $workflowAction,
         string $successMessage
     ): Response {
-        $order = $context->getEntity()->getInstance();
+        $order = $this->findOrderFromRequest($request, $entityManager);
 
         if (!$order instanceof CustomerOrder) {
             $this->addFlash('danger', 'Commande introuvable.');
@@ -442,6 +449,25 @@ class CustomerOrderCrudController extends AbstractCrudController
                 'sheet' => $this->buildOrderCrudUrl($adminUrlGenerator, $order, 'operationalSheet'),
             ],
         ]);
+    }
+
+    /**
+     * Charge la commande directement via entityId (query string), sans dépendre du
+     * contexte CRUD d'EasyAdmin : AdminContext::getEntity() peut lever
+     * "Cannot get entity outside of a CRUD context" sur certaines actions custom
+     * selon la version d'EasyAdminBundle installée.
+     */
+    private function findOrderFromRequest(Request $request, EntityManagerInterface $entityManager): ?CustomerOrder
+    {
+        $entityId = $request->query->get('entityId');
+
+        if ($entityId === null || $entityId === '') {
+            return null;
+        }
+
+        $order = $entityManager->getRepository(CustomerOrder::class)->find($entityId);
+
+        return $order instanceof CustomerOrder ? $order : null;
     }
 
     private function buildSmsUrl(string $phone, string $message): string

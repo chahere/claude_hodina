@@ -106,24 +106,26 @@ Si la version PHP par défaut n'est pas la bonne :
 /opt/cpanel/ea-php82/root/usr/bin/php bin/console cache:clear --env=prod
 ```
 
-## Checklist test recette
+## Checklist minimale — TOUJOURS en premier, avant toute checklist spécifique à un lot
+
+Règle ajoutée le 2026-07-08. Objectif : vérifier que le client peut commander et utiliser le site sans friction, et que l'admin/le livreur peuvent utiliser leurs portails, **avant** de dérouler les tests spécifiques au lot déployé. Si un point échoue, ne pas continuer sur le reste des tests — c'est prioritaire sur tout, y compris sur la checklist du lot en cours.
 
 - [ ] HTTPS valide sur mobile et desktop.
 - [ ] HTTP redirige vers HTTPS.
-- [ ] Basic Auth fonctionne.
-- [ ] Catalogue accessible.
-- [ ] Inscription client fonctionne.
-- [ ] Nom obligatoire.
-- [ ] Login client fonctionne.
-- [ ] Checkout exige CGU/CGV.
-- [ ] Commande créée.
+- [ ] Basic Auth fonctionne (recette uniquement).
+- [ ] Catalogue accessible (accueil + fiche produit, images chargent).
+- [ ] Inscription nouveau client fonctionne (nom obligatoire).
+- [ ] **Connexion d'un client existant (créé avant ce déploiement) fonctionne.** Le test le plus important après un lot qui touche `Customer`, la sécurité ou EasyAdmin : un souci de mapping, de firewall ou de `UserChecker` peut bloquer tout le monde, pas seulement le cas visé par le lot.
+- [ ] Checkout exige CGU/CGV, CGU/CGV lisibles sur mobile.
+- [ ] Panier → checkout → commande validée, de bout en bout (livraison + frais calculés).
+- [ ] Commande invité, si le site l'autorise.
+- [ ] Statut commande + SMS fonctionne (SmsLog ouvre Messages iPhone).
+- [ ] Mot de passe oublié génère un SmsLog, reset password fonctionne.
 - [ ] Backoffice `/ouegnewe` accessible aux admins.
-- [ ] Statut + SMS fonctionne.
-- [ ] SmsLog ouvre Messages iPhone.
-- [ ] Mot de passe oublié génère SmsLog.
-- [ ] Reset password fonctionne.
+- [ ] Portail livreur `/djama` accessible aux livreurs, prise en charge d'une commande OK.
 - [ ] Footer public ne contient pas le lien Admin.
-- [ ] CGU / CGV lisibles sur mobile.
+
+Seulement après ces points validés : dérouler la checklist spécifique au lot déployé (section correspondante plus bas dans ce document, ou le `README_MAJ_*` du lot).
 
 
 ---
@@ -4159,4 +4161,211 @@ Tags :
 ```text
 recette-j5aa-address-locality-20260704
 prod-j5aa-address-locality-20260704
+```
+
+# Déploiement 07/07/2026 — J5AD Chatbot IA + support client
+
+## Objet
+
+Lot J5AD : chatbot IA pour clients connectés dans `/mon-compte`, escalade vers ticket support humain, formulaire de contact anonyme (`/contact`), réglages LLM (clé API chiffrée), flag d'activation `HodinaSetting::ai_chatbot_enabled`. Détail fonctionnel : `README_MAJ_J5AD_CHATBOT_IA_SUPPORT_CLIENT_20260706.md`. Erreurs d'environnement rencontrées en mise en place locale et leurs correctifs : `NOTES_ENVIRONNEMENT_LOCAL_20260707.md`.
+
+## Nouveautés côté déploiement (script `tools/deploy-hodina-by-tag.sh`)
+
+Trois garde-fous ajoutés (additifs, le flux critique backup/migrations/cache est inchangé) :
+
+1. **Publication des assets des bundles** — `php bin/console assets:install public` publie les CSS/JS d'EasyAdmin dans `public/bundles/`. `asset-map:compile` ne gère que `public/assets/` ; sans cette étape, après une montée de version d'EasyAdmin le backoffice s'affiche non stylé (404 sur `/bundles/easyadmin/app.*.css`, « rond bleu »).
+2. **Vérification `importmap.php`** — l'entrée AssetMapper `admin` doit être présente (sinon EasyAdmin lève « The entrypoint "admin" does not exist in importmap.php », 500 sur `/ouegnewe`). `importmap.php` est désormais versionné.
+3. **Contrôle des dépendances J5AD** — `symfony/rate-limiter` et `symfony/http-client` sont requis par `config/packages/rate_limiter.yaml` et `http_client.yaml`. `composer.json/lock` n'étant pas versionnés, le script avertit tôt et donne la commande `composer require` si `vendor/` ne les contient pas.
+
+## Prérequis serveur — PREMIÈRE mise en recette du lot
+
+Le `composer.lock` du serveur ne contient pas encore les deux nouveaux paquets. Avant le premier déploiement J5AD (ou pendant, via `RUN_COMPOSER=1`) :
+
+```bash
+cd /home/vopu3712/recette.hodina.fr
+composer require symfony/rate-limiter symfony/http-client
+```
+
+Sans eux, `cache:warmup` échoue à compiler le conteneur (config `framework.rate_limiter` / `framework.http_client` sans le composant installé).
+
+## Commande recette
+
+```bash
+RUN_COMPOSER=1 bash tools/deploy-hodina-by-tag.sh \
+  --project-dir /home/vopu3712/recette.hodina.fr \
+  --tag j5ad-chatbot-ia-support-client-20260707 \
+  --target recette
+```
+
+## Commande production (après validation recette)
+
+```bash
+RUN_COMPOSER=1 bash tools/deploy-hodina-by-tag.sh \
+  --project-dir /home/vopu3712/hodina.fr \
+  --tag j5ad-chatbot-ia-support-client-20260707 \
+  --target prod
+```
+
+Le tag doit être créé depuis `main` après merge de la PR (règle : déploiement uniquement par tag contenu dans `origin/main`).
+
+## Si déploiement manuel (rappel des étapes sensibles)
+
+```bash
+php bin/console doctrine:migrations:status --env=prod
+php bin/console doctrine:migrations:migrate --env=prod --no-interaction
+php bin/console asset-map:compile --env=prod
+php bin/console assets:install public --env=prod          # publie les assets EasyAdmin, evite le « rond bleu »
+php -d memory_limit=-1 bin/console cache:clear --env=prod --no-warmup
+php -d memory_limit=-1 bin/console cache:warmup --env=prod
+php bin/console doctrine:schema:validate --env=prod
+```
+
+## Réglages post-déploiement (EasyAdmin)
+
+Le chatbot est **désactivé par défaut** (`ai_chatbot_enabled = 0`, seedé par la migration). Une fois le lot validé :
+
+- Réglages → Technique / maintenance → activer **Chatbot IA activé**.
+- Réglages → Réglages IA → choisir le fournisseur (Mock pour tester sans clé, sinon Anthropic/OpenAI + nom du modèle + clé API). La clé est chiffrée (AES-256-GCM dérivée de `APP_SECRET`) et jamais réaffichée. Elle est **propre à chaque environnement** : à ressaisir en recette et en prod (`APP_SECRET` diffère, la clé n'est pas transférable).
+
+Le formulaire de contact `/contact` et les tickets support fonctionnent indépendamment du flag.
+
+## Contrôles recette / prod
+
+- Backoffice `/ouegnewe` stylé (pas de « rond bleu ») → assets EasyAdmin bien publiés (`public/bundles/easyadmin`).
+- `/contact` accessible en visiteur non connecté → crée un ticket dans EasyAdmin → Support → Tickets support (e-mail admin logué dans E-mails (logs)).
+- `doctrine:schema:validate --env=prod` vert.
+- Flag OFF → lien « Assistant » absent de `/mon-compte`, `/mon-compte/assistant` redirige, `/contact` toujours actif.
+- Flag ON + provider Mock → `/mon-compte/assistant` répond en texte simulé.
+
+## Warnings connus / non bloquants
+
+- Récap du script : « Dépendances J5AD » en WARN tant que `composer require` n'a pas été fait sur ce serveur → normal au tout premier déploiement, résolu après installation.
+- « Assets EasyAdmin » en WARN si `assets:install` n'a pas encore tourné → le script le lance en étape 12.
+
+## Tags
+
+```text
+recette-j5ad-chatbot-ia-support-client-20260707
+prod-j5ad-chatbot-ia-support-client-20260707
+```
+
+# Déploiement 07/07/2026 — J5AE Widget flottant Assistant Hodina
+
+## Objet
+
+Lot J5AE : widget conversationnel flottant "Assistant Hodina" (moteur à règles, aucune IA), disponible sur tout le site public (catalogue, produit, panier, checkout, contact, espace client) pour visiteurs anonymes et clients connectés. Escalade vers `SupportTicket` (origine `CHAT_WIDGET`), réutilise les entités et le service de notification du lot J5AD. Détail : `README_MAJ_J5AE_WIDGET_ASSISTANT_HODINA_20260707.md`.
+
+## Différences avec un déploiement classique
+
+Aucune nouvelle dépendance Composer, aucun nouveau bundle. La seule migration (`Version20260707040000`) ajoute une ligne de réglage dans `hodina_setting` (idempotente). Les 3 garde-fous de déploiement posés pour J5AD (assets EasyAdmin, `importmap.php`, dépendances runtime) restent valables et suffisants : rien de spécifique à ajouter au script pour ce lot.
+
+## Commande recette
+
+```bash
+bash tools/deploy-hodina-by-tag.sh \
+  --project-dir /home/vopu3712/recette.hodina.fr \
+  --tag j5ae-widget-assistant-hodina-20260707 \
+  --target recette
+```
+
+## Commande production (après validation recette)
+
+```bash
+bash tools/deploy-hodina-by-tag.sh \
+  --project-dir /home/vopu3712/hodina.fr \
+  --tag j5ae-widget-assistant-hodina-20260707 \
+  --target prod
+```
+
+## Réglage post-déploiement (optionnel)
+
+Le bouton "Continuer sur Messenger" reste masqué tant que le lien n'est pas renseigné. Si souhaité : EasyAdmin → Réglages → Technique / maintenance → "Lien Messenger support" → coller l'URL publique de la page Messenger. Propre à chaque environnement, aucun jeton Meta n'est stocké ici (lien uniquement).
+
+## Contrôles recette / prod
+
+- Le bouton flottant (logo Hodina) apparaît sur catalogue, fiche produit, panier, checkout, contact, espace client.
+- Absent sur `/mon-compte/assistant` et `/djama`.
+- Une question "frais de livraison" ne renvoie jamais de tarif chiffré, seulement un renvoi vers Infos livraison.
+- Une escalade (formulaire ou mot-clé "humain"/"parler à l'équipe") crée un ticket EasyAdmin → Support → Tickets support, origine "Widget assistant Hodina", e-mail admin dans Logs → E-mails (logs).
+- `doctrine:schema:validate --env=prod` vert.
+
+## Tags
+
+```text
+recette-j5ae-widget-assistant-hodina-20260707
+prod-j5ae-widget-assistant-hodina-20260707
+```
+
+# Déploiement 08/07/2026 — J5AF suppression pilote corrigée + anonymisation RGPD
+
+## Objet
+
+Corrige la suppression physique d'un client (« Supprimer pilote »), cassée depuis J5AD (`ChatbotConversation.customer` NOT NULL sans `ON DELETE`, non gérée par `CustomerPilotCascadeDeleter`). Ajoute l'anonymisation RGPD (nouvelle action admin « Anonymiser »). Détail : `docs/README_MAJ_J5AF_SUPPRESSION_ANONYMISATION_CLIENT_20260708.md`.
+
+Deux migrations : `Version20260708120000` (ajout `customer.is_active`/`customer.anonymized_at`) et `Version20260708130000` (migration corrective : normalise `is_active` en `TINYINT NOT NULL` pour correspondre au mapping Doctrine — voir `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §13).
+
+## Commande recette
+
+```bash
+PUBLIC_URL=https://recette.hodina.fr bash tools/deploy-hodina-by-tag.sh \
+  --project-dir ~/recette.hodina.fr \
+  --tag recette-j5af-suppression-anonymisation-client-20260708 \
+  --target recette
+```
+
+## Résultat recette (confirmé)
+
+Déploiement exécuté avec succès, sortie complète du script confirmée : migrations exécutées (2 migrations, « 0 sql queries » — comportement normal des migrations défensives de ce projet, voir NOTES §13, pas un signe d'échec), `doctrine:schema:validate` vert (mapping + base), assets EasyAdmin publiés, cache prod réchauffé, `git status` propre après checkout du tag, URL publique HTTP 200.
+
+## Tests fonctionnels recette (confirmés)
+
+Suppression pilote d'un client avec conversation IA existante : réussie (plusieurs clients de test supprimés). Anonymisation : scrub des données + blocage de connexion + conservation de l'historique métier confirmés.
+
+## Statut production
+
+Non déployé à ce jour.
+
+## Tags
+
+```text
+recette-j5af-suppression-anonymisation-client-20260708
+```
+
+# Déploiement 08/07/2026 — Correctif transverse AdminContext + J5AG (gestion logs SMS/e-mails)
+
+## Objet
+
+Deux concerns mergés sur `main` avant tag, déployés ensemble :
+
+- **Correctif `AdminContext::getEntity()`** (piège n°11) : 4 contrôleurs corrigés au total (`Customer` avec J5AF, puis `CustomerOrder`, `SupportTicket`, `CourierPayout` — le pattern `entityId` + `EntityManagerInterface` remplace partout la dépendance à `$context->getEntity()`). Détail : `CLAUDE.md` piège n°11, `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §12.
+- **J5AG** — gestion des logs SMS/e-mails (bouton « Vider les SMS logs », suppression unitaire/par lot + « Vider » pour EmailLog) et promotion de la checklist recette existante en checklist minimale permanente (voir § Checklist minimale en tête de ce document). Détail : `docs/README_MAJ_J5AG_GESTION_LOGS_SMS_EMAIL_20260708.md`.
+
+Aucune migration pour ces deux concerns.
+
+## Commande recette
+
+```bash
+PUBLIC_URL=https://recette.hodina.fr bash tools/deploy-hodina-by-tag.sh \
+  --project-dir ~/recette.hodina.fr \
+  --tag recette-j5ag-fix-admincontext-20260708 \
+  --target recette
+```
+
+## Résultat recette
+
+**Non confirmé par une sortie de script à ce stade.** Le tag a été créé (localement, vérifié par `git rev-parse` avant push) et poussé avec succès sur `origin` — confirmé. L'exécution réelle du script de déploiement recette pour ce tag précis n'a pas été montrée dans cette session : à vérifier avant de considérer ce lot validé recette (dérouler la checklist minimale en premier).
+
+## Tests fonctionnels (confirmés en local, hodina.fr)
+
+Validation de commande (« Valider + SMS ») testée avec succès après correctif — reproduisait un 500 avant correction. Gestion des logs SMS/e-mails testée en local (bouton vider, confirmation, compteur, suppression unitaire/par lot EmailLog).
+
+## Statut production
+
+Non déployé à ce jour.
+
+## Tags
+
+```text
+recette-j5ag-fix-admincontext-20260708
+recette-j5ag-gestion-logs-sms-email-20260708
 ```

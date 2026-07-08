@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Entity\EmailLog;
+use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -14,6 +15,10 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\EmailField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
 
 class EmailLogCrudController extends AbstractCrudController
 {
@@ -39,6 +44,11 @@ class EmailLogCrudController extends AbstractCrudController
             ])
             ->setCssClass('btn btn-primary');
 
+        $clearAll = Action::new('clearAllEmailLogs', 'Vider les journaux e-mails', 'fa fa-trash')
+            ->createAsGlobalAction()
+            ->linkToRoute('admin_email_log_clear')
+            ->setCssClass('btn btn-danger');
+
         return $actions
             // Le détail EasyAdmin permet de lire le corps complet du mail et l'erreur éventuelle.
             ->add(Action::INDEX, Action::DETAIL)
@@ -52,7 +62,46 @@ class EmailLogCrudController extends AbstractCrudController
             })
             ->add(Action::INDEX, $sendManualEmail)
             ->add(Action::DETAIL, $sendManualEmail)
-            ->disable(Action::NEW, Action::EDIT, Action::DELETE);
+            ->add(Crud::PAGE_INDEX, $clearAll)
+            // Suppression unitaire et par lot autorisées : ce sont des journaux, pas des données métier.
+            ->disable(Action::NEW, Action::EDIT);
+    }
+
+    #[Route('/ouegnewe/email-logs/vider', name: 'admin_email_log_clear')]
+    public function clearAll(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator): Response
+    {
+        $count = (int) $entityManager->createQuery('SELECT COUNT(e.id) FROM '.EmailLog::class.' e')->getSingleScalarResult();
+
+        if ($request->isMethod('POST')) {
+            $token = (string) $request->request->get('_token');
+            if (!$this->isCsrfTokenValid('clear_email_logs', $token)) {
+                throw $this->createAccessDeniedException('Jeton CSRF invalide.');
+            }
+
+            $entityManager->createQuery('DELETE FROM '.EmailLog::class.' e')->execute();
+
+            $this->addFlash('success', sprintf('%d journal(-aux) e-mail(s) supprimé(s).', $count));
+
+            return $this->redirect($this->buildIndexUrl($adminUrlGenerator));
+        }
+
+        return $this->render('admin/_clear_all_confirm.html.twig', [
+            'title' => 'Vider les journaux e-mails',
+            'entityLabel' => 'journal(-aux) e-mail(s)',
+            'count' => $count,
+            'warningText' => 'Cette action supprime définitivement tous les journaux e-mails enregistrés, y compris ceux liés à des commandes existantes. Elle est irréversible.',
+            'csrfTokenId' => 'clear_email_logs',
+            'cancelUrl' => $this->buildIndexUrl($adminUrlGenerator),
+        ]);
+    }
+
+    private function buildIndexUrl(AdminUrlGenerator $adminUrlGenerator): string
+    {
+        return $adminUrlGenerator
+            ->unsetAll()
+            ->setController(self::class)
+            ->setAction(Action::INDEX)
+            ->generateUrl();
     }
 
     public function configureFields(string $pageName): iterable

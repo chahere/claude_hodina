@@ -35,6 +35,9 @@ class HodinaSetting
     public const KEY_COURIER_PAYOUT_ADMIN_RECAP_ENABLED = 'courier_payout_admin_recap_enabled';
     public const KEY_COURIER_PAYOUT_FREQUENCY = 'courier_payout_frequency';
 
+    public const KEY_AI_CHATBOT_ENABLED = 'ai_chatbot_enabled';
+    public const KEY_SUPPORT_MESSENGER_URL = 'support_messenger_url';
+
     public const KEY_EMAIL_BRANDING_SUBJECT_PREFIX = 'email_branding_subject_prefix';
     public const KEY_EMAIL_BRANDING_OPENING_FORMULA = 'email_branding_opening_formula';
     public const KEY_EMAIL_BRANDING_CLOSING_FORMULA = 'email_branding_closing_formula';
@@ -323,6 +326,7 @@ class HodinaSetting
             self::KEY_COURIER_PAYOUTS_ENABLED,
             self::KEY_COURIER_PAYOUT_CRON_ENABLED,
             self::KEY_COURIER_PAYOUT_ADMIN_RECAP_ENABLED,
+            self::KEY_AI_CHATBOT_ENABLED,
         ];
     }
 

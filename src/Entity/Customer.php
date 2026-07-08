@@ -56,6 +56,19 @@ class Customer implements UserInterface, PasswordAuthenticatedUserInterface
     private ?\DateTimeImmutable $resetPasswordTokenExpiresAt = null;
 
     /**
+     * false = compte désactivé (anonymisé, ou suspendu). Bloque la connexion,
+     * cf. App\Security\CustomerUserChecker.
+     */
+    #[ORM\Column]
+    private bool $isActive = true;
+
+    /**
+     * Date d'anonymisation, si ce compte a été anonymisé. Null = jamais anonymisé.
+     */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $anonymizedAt = null;
+
+    /**
      * Plafond maximum versé à ce livreur par commande.
      *
      * Null ou 0 = utiliser le plafond global Hodina.
@@ -245,6 +258,36 @@ class Customer implements UserInterface, PasswordAuthenticatedUserInterface
 
         return $this;
     }
+
+    public function isActive(): bool
+    {
+        return $this->isActive;
+    }
+
+    public function setIsActive(bool $isActive): self
+    {
+        $this->isActive = $isActive;
+
+        return $this;
+    }
+
+    public function getAnonymizedAt(): ?\DateTimeImmutable
+    {
+        return $this->anonymizedAt;
+    }
+
+    public function setAnonymizedAt(?\DateTimeImmutable $anonymizedAt): self
+    {
+        $this->anonymizedAt = $anonymizedAt;
+
+        return $this;
+    }
+
+    public function isAnonymized(): bool
+    {
+        return $this->anonymizedAt !== null;
+    }
+
     /**
      * @return Collection<int, Address>
      */

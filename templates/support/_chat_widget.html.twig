@@ -1,0 +1,676 @@
+{#
+    Widget flottant "Assistant Hodina" (moteur à règles, aucune IA).
+    Inclus une seule fois via base.html.twig (bloc chat_widget), donc visible
+    sur tout le site public : catalogue, fiche produit, panier, checkout,
+    contact, espace client. Masqué explicitement sur /mon-compte/assistant
+    (chatbot IA plein écran, J5AD) et /djama (portail livreur).
+#}
+<div class="hodina-chat-widget"
+     data-chat-widget
+     data-message-url="{{ path('support_widget_message') }}"
+     data-escalate-url="{{ path('support_widget_escalate') }}"
+     data-token-message="{{ csrf_token('widget_chat_message') }}"
+     data-token-escalate="{{ csrf_token('widget_chat_escalate') }}"
+     data-connected="{{ app.user ? '1' : '0' }}"
+     {# Frames de l'animation du bouton flottant (illusion de mouvement). #}
+     data-frames="{{ [
+         asset('images/assistant/assistant_hodina_1.png'),
+         asset('images/assistant/assistant_hodina_2.png'),
+         asset('images/assistant/assistant_hodina_3.png'),
+         asset('images/assistant/assistant_hodina_4.png')
+     ]|json_encode }}">
+
+    <button type="button"
+            class="hodina-chat-widget__toggle"
+            data-chat-widget-toggle
+            aria-expanded="false"
+            aria-controls="hodina-chat-widget-panel"
+            aria-label="Ouvrir ou déplacer l’assistant Hodina">
+        <img src="{{ asset('images/assistant/assistant_hodina_1.png') }}" alt="" class="hodina-chat-widget__toggle-icon" data-chat-widget-frame draggable="false">
+    </button>
+
+    <section id="hodina-chat-widget-panel"
+             class="hodina-chat-widget__panel"
+             data-chat-widget-panel
+             hidden
+             role="dialog"
+             aria-label="Assistant Hodina">
+        <header class="hodina-chat-widget__header">
+            <div class="hodina-chat-widget__header-brand">
+                <img src="{{ asset('images/assistant/assistant_hodina_1.png') }}" alt="" class="hodina-chat-widget__header-logo">
+                <span>Assistant Hodina</span>
+            </div>
+            <div class="hodina-chat-widget__header-actions">
+                {# Mobile uniquement (masqué en CSS dès 720px) : agrandit le panneau du bas de la bannière jusqu'au-dessus du footer. #}
+                <button type="button" class="hodina-chat-widget__maximize" data-chat-widget-maximize aria-label="Agrandir la conversation" aria-pressed="false">
+                    <span class="hodina-chat-widget__maximize-icon" aria-hidden="true"></span>
+                </button>
+                <button type="button" class="hodina-chat-widget__close" data-chat-widget-close aria-label="Fermer l’assistant">✕</button>
+            </div>
+        </header>
+
+        <div class="hodina-chat-widget__messages" data-chat-widget-messages aria-live="polite"></div>
+
+        <div class="hodina-chat-widget__quick-replies" data-chat-widget-quick-replies hidden></div>
+
+        <form class="hodina-chat-widget__escalate" data-chat-widget-escalate-form hidden>
+            <p class="hodina-chat-widget__escalate-intro">Laissez-nous vos coordonnées, l’équipe Hodina vous répond rapidement.</p>
+
+            <input type="text" name="website" class="hodina-chat-widget__honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+            {% if not app.user %}
+                <label class="sr-only" for="hodina-chat-widget-name">Nom</label>
+                <input type="text" id="hodina-chat-widget-name" name="name" placeholder="Votre nom" data-chat-widget-field="name" required>
+
+                <label class="sr-only" for="hodina-chat-widget-email">E-mail</label>
+                <input type="email" id="hodina-chat-widget-email" name="email" placeholder="Votre e-mail" data-chat-widget-field="email">
+
+                <label class="sr-only" for="hodina-chat-widget-phone">Téléphone</label>
+                <input type="tel" id="hodina-chat-widget-phone" name="phone" placeholder="Votre téléphone (si pas d’e-mail)" data-chat-widget-field="phone">
+            {% endif %}
+
+            <label class="sr-only" for="hodina-chat-widget-escalate-message">Votre demande</label>
+            <textarea id="hodina-chat-widget-escalate-message" name="message" placeholder="Décrivez votre demande…" data-chat-widget-field="message" required></textarea>
+
+            <p class="hodina-chat-widget__form-error" data-chat-widget-escalate-error hidden></p>
+
+            <div class="hodina-chat-widget__escalate-actions">
+                <button type="submit" class="hodina-chat-widget__btn hodina-chat-widget__btn--primary">Envoyer à l’équipe</button>
+                <button type="button" class="hodina-chat-widget__btn" data-chat-widget-cancel-escalate>Annuler</button>
+            </div>
+        </form>
+
+        <form class="hodina-chat-widget__composer" data-chat-widget-composer>
+            <label class="sr-only" for="hodina-chat-widget-input">Tapez votre question</label>
+            <input type="text"
+                   id="hodina-chat-widget-input"
+                   name="message"
+                   placeholder="Tapez votre question…"
+                   autocomplete="off"
+                   maxlength="2000"
+                   data-chat-widget-input>
+            <button type="submit" class="hodina-chat-widget__send" aria-label="Envoyer">➤</button>
+        </form>
+    </section>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var root = document.querySelector('[data-chat-widget]');
+    if (!root) {
+        return;
+    }
+
+    var toggle = root.querySelector('[data-chat-widget-toggle]');
+    var panel = root.querySelector('[data-chat-widget-panel]');
+    var closeBtn = root.querySelector('[data-chat-widget-close]');
+    var messagesEl = root.querySelector('[data-chat-widget-messages]');
+    var quickRepliesEl = root.querySelector('[data-chat-widget-quick-replies]');
+    var composer = root.querySelector('[data-chat-widget-composer]');
+    var input = root.querySelector('[data-chat-widget-input]');
+    var escalateForm = root.querySelector('[data-chat-widget-escalate-form]');
+    var escalateError = root.querySelector('[data-chat-widget-escalate-error]');
+    var cancelEscalateBtn = root.querySelector('[data-chat-widget-cancel-escalate]');
+    var maximizeBtn = root.querySelector('[data-chat-widget-maximize]');
+
+    if (!toggle || !panel || !messagesEl || !composer || !input || !escalateForm) {
+        return;
+    }
+
+    var messageUrl = root.getAttribute('data-message-url');
+    var escalateUrl = root.getAttribute('data-escalate-url');
+    var tokenMessage = root.getAttribute('data-token-message');
+    var tokenEscalate = root.getAttribute('data-token-escalate');
+
+    var STORAGE_KEY = 'hodina_widget_state_v1';
+    var POSITION_STORAGE_KEY = 'hodina_widget_position_v1';
+    var DRAG_THRESHOLD_PX = 6;
+    var FRAME_INTERVAL_MS = 550;
+    var DEFAULT_QUICK_REPLIES = ['Frais de livraison', 'Où est ma commande ?', 'Produits disponibles', 'Parler à l’équipe'];
+    var WELCOME_TEXT = 'Bonjour 👋 Je suis l’assistant Hodina. Je peux vous aider sur les commandes, la livraison, les produits ou vous mettre en contact avec l’équipe.';
+
+    var frameImg = toggle.querySelector('[data-chat-widget-frame]');
+    var frames = [];
+    try {
+        frames = JSON.parse(root.getAttribute('data-frames') || '[]');
+    } catch (e) { frames = []; }
+
+    var state = loadState();
+
+    function loadState() {
+        try {
+            var raw = window.sessionStorage.getItem(STORAGE_KEY);
+            if (!raw) {
+                return { open: false, log: [], recentExchange: [] };
+            }
+            var parsed = JSON.parse(raw);
+            return {
+                open: !!parsed.open,
+                log: Array.isArray(parsed.log) ? parsed.log : [],
+                recentExchange: Array.isArray(parsed.recentExchange) ? parsed.recentExchange : []
+            };
+        } catch (e) {
+            return { open: false, log: [], recentExchange: [] };
+        }
+    }
+
+    function saveState() {
+        try {
+            window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) { /* stockage indisponible : on continue sans persistance */ }
+    }
+
+    function appendBubble(role, text, options) {
+        options = options || {};
+        var bubble = document.createElement('div');
+        bubble.className = 'hodina-chat-widget__bubble hodina-chat-widget__bubble--' + role;
+
+        var textEl = document.createElement('p');
+        textEl.textContent = text;
+        bubble.appendChild(textEl);
+
+        if (options.action && options.action.url && options.action.label) {
+            var link = document.createElement('a');
+            link.href = options.action.url;
+            link.className = 'hodina-chat-widget__bubble-action';
+            link.textContent = options.action.label;
+            bubble.appendChild(link);
+        }
+
+        if (options.messengerUrl) {
+            var messengerLink = document.createElement('a');
+            messengerLink.href = options.messengerUrl;
+            messengerLink.target = '_blank';
+            messengerLink.rel = 'noopener';
+            messengerLink.className = 'hodina-chat-widget__bubble-action';
+            messengerLink.textContent = 'Continuer sur Messenger';
+            bubble.appendChild(messengerLink);
+        }
+
+        messagesEl.appendChild(bubble);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+
+        return bubble;
+    }
+
+    function renderLog() {
+        messagesEl.innerHTML = '';
+        state.log.forEach(function (entry) {
+            appendBubble(entry.role, entry.text, { action: entry.action, messengerUrl: entry.messengerUrl });
+        });
+    }
+
+    function pushLog(role, text, extra) {
+        var entry = { role: role, text: text };
+        if (extra && extra.action) { entry.action = extra.action; }
+        if (extra && extra.messengerUrl) { entry.messengerUrl = extra.messengerUrl; }
+        state.log.push(entry);
+        saveState();
+    }
+
+    function setQuickReplies(labels) {
+        quickRepliesEl.innerHTML = '';
+        if (!labels || !labels.length) {
+            quickRepliesEl.hidden = true;
+            return;
+        }
+        labels.forEach(function (label) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'hodina-chat-widget__quick-reply';
+            btn.textContent = label;
+            btn.addEventListener('click', function () { sendMessage(label); });
+            quickRepliesEl.appendChild(btn);
+        });
+        quickRepliesEl.hidden = false;
+    }
+
+    function showTyping() {
+        var bubble = document.createElement('div');
+        bubble.className = 'hodina-chat-widget__bubble hodina-chat-widget__bubble--assistant hodina-chat-widget__bubble--typing';
+        bubble.setAttribute('data-chat-widget-typing', '');
+        bubble.textContent = 'Hodina écrit…';
+        messagesEl.appendChild(bubble);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return bubble;
+    }
+
+    // Le bouton reste toujours visible, même panneau ouvert (au-dessus en
+    // z-index, cf. CSS) : on peut le recliquer pour fermer, ou le glisser
+    // pour repositionner le panneau en direct (cf. pointermove plus bas).
+    // Comportement unifié mobile/desktop : le panneau est une fenêtre
+    // compacte ancrée au-dessus du bouton, jamais une feuille pleine largeur.
+    function openPanel() {
+        repositionPanelNearToggle();
+        panel.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+        state.open = true;
+        saveState();
+
+        if (state.log.length === 0) {
+            appendBubble('assistant', WELCOME_TEXT);
+            pushLog('assistant', WELCOME_TEXT);
+            setQuickReplies(DEFAULT_QUICK_REPLIES);
+        }
+
+        window.setTimeout(function () { input.focus(); }, 50);
+    }
+
+    function closePanel() {
+        panel.hidden = true;
+        toggle.setAttribute('aria-expanded', 'false');
+        state.open = false;
+        saveState();
+
+        if (isFullscreen) {
+            setFullscreen(false);
+        }
+    }
+
+    function sendMessage(text) {
+        text = (text || '').trim();
+        if (!text) { return; }
+
+        appendBubble('user', text);
+        pushLog('user', text);
+        state.recentExchange.push({ role: 'user', text: text });
+        state.recentExchange = state.recentExchange.slice(-10);
+        saveState();
+
+        setQuickReplies(null);
+        var typingBubble = showTyping();
+        input.value = '';
+        input.disabled = true;
+
+        fetch(messageUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ message: text, _token: tokenMessage })
+        })
+            .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+            .then(function (result) {
+                typingBubble.remove();
+                input.disabled = false;
+                input.focus();
+
+                if (!result.ok || !result.data || !result.data.reply) {
+                    var errorText = 'Désolé, une erreur est survenue. Vous pouvez réessayer ou contacter directement l’équipe.';
+                    appendBubble('assistant', errorText);
+                    pushLog('assistant', errorText);
+                    revealEscalateForm(text);
+                    return;
+                }
+
+                var reply = result.data.reply;
+                appendBubble('assistant', reply.text, { action: reply.action });
+                pushLog('assistant', reply.text, { action: reply.action });
+                state.recentExchange.push({ role: 'assistant', text: reply.text });
+                state.recentExchange = state.recentExchange.slice(-10);
+                saveState();
+
+                setQuickReplies(reply.quickReplies && reply.quickReplies.length ? reply.quickReplies : null);
+
+                if (reply.suggestEscalation) {
+                    revealEscalateForm(text);
+                }
+            })
+            .catch(function () {
+                typingBubble.remove();
+                input.disabled = false;
+                var errorText = 'Désolé, une erreur réseau est survenue. Vous pouvez réessayer ou contacter directement l’équipe.';
+                appendBubble('assistant', errorText);
+                pushLog('assistant', errorText);
+                revealEscalateForm(text);
+            });
+    }
+
+    function revealEscalateForm(prefillMessage) {
+        escalateForm.hidden = false;
+        escalateError.hidden = true;
+        var messageField = escalateForm.querySelector('[data-chat-widget-field="message"]');
+        if (messageField && !messageField.value) {
+            messageField.value = prefillMessage || '';
+        }
+        window.setTimeout(function () { escalateForm.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 50);
+    }
+
+    // --- Animation "sprite" (illusion de mouvement) ---
+    // Ne démarre que si les frames sont réellement différentes : tant que ce
+    // sont des placeholders identiques (cf. commentaire Twig ci-dessus), la
+    // boucle ne se lance pas. Dès que les vrais visuels seront fournis,
+    // l'animation s'active automatiquement, sans autre changement de code.
+    (function initFrameAnimation() {
+        if (!frameImg || frames.length < 2 || new Set(frames).size < 2) {
+            return;
+        }
+        var index = 0;
+        window.setInterval(function () {
+            index = (index + 1) % frames.length;
+            frameImg.src = frames[index];
+        }, FRAME_INTERVAL_MS);
+    })();
+
+    // --- Position déplaçable (souris / tactile) ---
+
+    // window.innerWidth/innerHeight peuvent inclure une zone masquée par la
+    // barre du navigateur mobile (rétractable) : une marge calculée dessus
+    // atterrit parfois hors de la zone réellement visible (écart visuel
+    // asymétrique constaté en plein écran). visualViewport reflète la zone
+    // effectivement visible ; repli sur innerWidth/innerHeight si absent.
+    function getViewportSize() {
+        if (window.visualViewport) {
+            return { width: window.visualViewport.width, height: window.visualViewport.height };
+        }
+        return { width: window.innerWidth, height: window.innerHeight };
+    }
+
+    function clampPosition(right, bottom) {
+        var viewport = getViewportSize();
+        var maxRight = Math.max(8, viewport.width - toggle.offsetWidth - 8);
+        var maxBottom = Math.max(8, viewport.height - toggle.offsetHeight - 8);
+        return {
+            right: Math.min(Math.max(right, 8), maxRight),
+            bottom: Math.min(Math.max(bottom, 8), maxBottom)
+        };
+    }
+
+    function applyPosition(right, bottom) {
+        toggle.style.left = 'auto';
+        toggle.style.top = 'auto';
+        toggle.style.right = right + 'px';
+        toggle.style.bottom = bottom + 'px';
+    }
+
+    function currentPosition() {
+        var rect = toggle.getBoundingClientRect();
+        var viewport = getViewportSize();
+        return {
+            right: viewport.width - rect.right,
+            bottom: viewport.height - rect.bottom
+        };
+    }
+
+    function loadPosition() {
+        try {
+            var raw = window.localStorage.getItem(POSITION_STORAGE_KEY);
+            if (!raw) { return null; }
+            var parsed = JSON.parse(raw);
+            if (typeof parsed.right === 'number' && typeof parsed.bottom === 'number') {
+                return parsed;
+            }
+        } catch (e) { /* ignore */ }
+        return null;
+    }
+
+    function savePosition(position) {
+        try {
+            window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position));
+        } catch (e) { /* stockage indisponible : la position ne sera pas retenue */ }
+    }
+
+    var storedPosition = loadPosition();
+    if (storedPosition) {
+        var initialClamped = clampPosition(storedPosition.right, storedPosition.bottom);
+        applyPosition(initialClamped.right, initialClamped.bottom);
+    }
+
+    var PANEL_MAX_HEIGHT = 560;
+    var PANEL_MARGIN = 8;
+
+    function clampNumber(value, min, max) {
+        if (max < min) { return min; }
+        return Math.min(Math.max(value, min), max);
+    }
+
+    // Largeur cible réduite sur petit écran (téléphone) — jamais la pleine
+    // largeur de l'écran, bornée pour ne jamais déborder. 380px sur les
+    // écrans larges (identique à la valeur historique desktop).
+    function getPanelWidth() {
+        var viewport = getViewportSize();
+        var target = viewport.width < 720 ? 300 : 380;
+        return Math.min(target, viewport.width - (PANEL_MARGIN * 2));
+    }
+
+    // Comportement unifié mobile/desktop : le panneau s'ouvre toujours
+    // au-dessus du bouton, et horizontalement à sa droite par défaut, ou à
+    // sa gauche s'il n'y a pas la place (bouton trop proche du bord droit).
+    function repositionPanelNearToggle() {
+        var rect = toggle.getBoundingClientRect();
+        var panelWidth = getPanelWidth();
+        var viewport = getViewportSize();
+
+        var opensToTheRight = (rect.left + panelWidth + PANEL_MARGIN) <= viewport.width;
+        var left = opensToTheRight ? rect.left : (rect.right - panelWidth);
+        left = clampNumber(left, PANEL_MARGIN, viewport.width - panelWidth - PANEL_MARGIN);
+
+        // Vertical : toujours au-dessus du bouton, borné pour rester à l'écran.
+        var bottom = clampNumber((viewport.height - rect.top) + 12, PANEL_MARGIN, viewport.height - PANEL_MAX_HEIGHT - PANEL_MARGIN);
+
+        panel.style.width = panelWidth + 'px';
+        panel.style.right = 'auto';
+        panel.style.top = 'auto';
+        panel.style.left = left + 'px';
+        panel.style.bottom = bottom + 'px';
+    }
+
+    // --- Plein écran (mobile uniquement) ---
+    // Le panneau s'étend du bas de la bannière du site (.site-header, sticky
+    // en haut) jusqu'à une marge du bas de l'écran. Bouton masqué en CSS dès
+    // 720px : cette fonction n'est de toute façon appelable que via un clic
+    // sur ce bouton, invisible sur desktop.
+    var isFullscreen = false;
+
+    function setFullscreen(active) {
+        isFullscreen = active;
+        toggle.hidden = active;
+
+        if (maximizeBtn) {
+            maximizeBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            maximizeBtn.setAttribute('aria-label', active ? 'Réduire la conversation' : 'Agrandir la conversation');
+        }
+
+        if (active) {
+            var headerEl = document.querySelector('.site-header');
+            var viewport = getViewportSize();
+            var topOffset = (headerEl ? headerEl.getBoundingClientRect().bottom : 0) + PANEL_MARGIN;
+
+            // Hauteur explicite ancrée par le haut plutôt que "bottom:8px" :
+            // sur mobile, position:fixed + bottom peut se résoudre par
+            // rapport à une zone plus grande que celle réellement visible
+            // (barre du navigateur rétractable), ce qui rendait l'écart du
+            // bas visuellement plus grand que celui du haut. En calculant
+            // la hauteur nous-mêmes depuis visualViewport (zone réellement
+            // visible), le bas du panneau tombe exactement à la même marge
+            // que le haut.
+            panel.style.top = topOffset + 'px';
+            panel.style.bottom = 'auto';
+            panel.style.height = Math.max(120, viewport.height - topOffset - PANEL_MARGIN) + 'px';
+            panel.style.left = PANEL_MARGIN + 'px';
+            panel.style.right = PANEL_MARGIN + 'px';
+            panel.style.width = 'auto';
+            panel.style.maxWidth = 'none';
+            panel.style.maxHeight = 'none';
+        } else {
+            panel.style.maxWidth = '';
+            panel.style.maxHeight = '';
+            panel.style.height = '';
+            repositionPanelNearToggle();
+        }
+    }
+
+    if (maximizeBtn) {
+        maximizeBtn.addEventListener('click', function () {
+            setFullscreen(!isFullscreen);
+        });
+    }
+
+    window.addEventListener('resize', function () {
+        if (isFullscreen) {
+            // Repli si la fenêtre passe en largeur desktop (le bouton
+            // plein écran y est masqué) ; sinon, recalcule la hauteur
+            // disponible (rotation d'écran, bannière qui change de taille).
+            setFullscreen(getViewportSize().width < 720);
+            return;
+        }
+
+        var pos = currentPosition();
+        var clamped = clampPosition(pos.right, pos.bottom);
+        applyPosition(clamped.right, clamped.bottom);
+
+        if (!panel.hidden) {
+            repositionPanelNearToggle();
+        }
+    });
+
+    var dragState = null;
+
+    // Empêche le glisser-déposer natif du navigateur sur l'image (qui
+    // volait le geste au glisser-déposer personnalisé ci-dessous).
+    toggle.addEventListener('dragstart', function (event) { event.preventDefault(); });
+
+    toggle.addEventListener('pointerdown', function (event) {
+        if (event.button !== undefined && event.button !== 0) { return; }
+
+        event.preventDefault();
+
+        var start = currentPosition();
+        dragState = {
+            pointerId: event.pointerId,
+            startClientX: event.clientX,
+            startClientY: event.clientY,
+            startRight: start.right,
+            startBottom: start.bottom,
+            moved: false
+        };
+        toggle.setPointerCapture(event.pointerId);
+    });
+
+    toggle.addEventListener('pointermove', function (event) {
+        if (!dragState || dragState.pointerId !== event.pointerId) { return; }
+
+        var deltaX = event.clientX - dragState.startClientX;
+        var deltaY = event.clientY - dragState.startClientY;
+
+        if (!dragState.moved && Math.abs(deltaX) < DRAG_THRESHOLD_PX && Math.abs(deltaY) < DRAG_THRESHOLD_PX) {
+            return;
+        }
+
+        if (!dragState.moved) {
+            dragState.moved = true;
+            toggle.classList.add('is-dragging');
+        }
+
+        var next = clampPosition(dragState.startRight - deltaX, dragState.startBottom - deltaY);
+        applyPosition(next.right, next.bottom);
+
+        // Le panneau suit le bouton en direct pendant le glissement, s'il
+        // est ouvert.
+        if (!panel.hidden) {
+            repositionPanelNearToggle();
+        }
+    });
+
+    function endDrag(event) {
+        if (!dragState || dragState.pointerId !== event.pointerId) { return; }
+
+        var wasDrag = dragState.moved;
+        toggle.classList.remove('is-dragging');
+        dragState = null;
+
+        if (wasDrag) {
+            savePosition(currentPosition());
+            return;
+        }
+
+        if (panel.hidden) { openPanel(); } else { closePanel(); }
+    }
+
+    toggle.addEventListener('pointerup', endDrag);
+    toggle.addEventListener('pointercancel', endDrag);
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closePanel);
+    }
+
+    composer.addEventListener('submit', function (event) {
+        event.preventDefault();
+        sendMessage(input.value);
+    });
+
+    if (cancelEscalateBtn) {
+        cancelEscalateBtn.addEventListener('click', function () {
+            escalateForm.hidden = true;
+        });
+    }
+
+    escalateForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        var messageField = escalateForm.querySelector('[data-chat-widget-field="message"]');
+        var nameField = escalateForm.querySelector('[data-chat-widget-field="name"]');
+        var emailField = escalateForm.querySelector('[data-chat-widget-field="email"]');
+        var phoneField = escalateForm.querySelector('[data-chat-widget-field="phone"]');
+        var honeypotField = escalateForm.querySelector('input[name="website"]');
+
+        var payload = {
+            message: messageField ? messageField.value : '',
+            name: nameField ? nameField.value : '',
+            email: emailField ? emailField.value : '',
+            phone: phoneField ? phoneField.value : '',
+            website: honeypotField ? honeypotField.value : '',
+            recentExchange: state.recentExchange,
+            _token: tokenEscalate
+        };
+
+        var submitBtn = escalateForm.querySelector('button[type="submit"]');
+        if (submitBtn) { submitBtn.disabled = true; }
+        escalateError.hidden = true;
+
+        fetch(escalateUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+            .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+            .then(function (result) {
+                if (submitBtn) { submitBtn.disabled = false; }
+
+                if (!result.ok || !result.data || result.data.ok !== true) {
+                    escalateError.textContent = (result.data && result.data.error) || 'Impossible d’envoyer votre demande pour le moment.';
+                    escalateError.hidden = false;
+                    return;
+                }
+
+                escalateForm.hidden = true;
+                escalateForm.reset();
+
+                var confirmationText = 'Merci, votre demande a été transmise à l’équipe Hodina. Nous vous répondrons rapidement.';
+                appendBubble('assistant', confirmationText, { messengerUrl: result.data.messengerUrl || null });
+                pushLog('assistant', confirmationText, { messengerUrl: result.data.messengerUrl || null });
+            })
+            .catch(function () {
+                if (submitBtn) { submitBtn.disabled = false; }
+                escalateError.textContent = 'Erreur réseau. Réessayez dans un instant.';
+                escalateError.hidden = false;
+            });
+    });
+
+    if (state.log.length > 0) {
+        renderLog();
+        var last = state.log[state.log.length - 1];
+        if (last && last.role === 'assistant') {
+            setQuickReplies(DEFAULT_QUICK_REPLIES);
+        }
+    }
+
+    if (state.open) {
+        repositionPanelNearToggle();
+        panel.hidden = false;
+        toggle.setAttribute('aria-expanded', 'true');
+    }
+})();
+</script>

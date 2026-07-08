@@ -2,6 +2,7 @@
 
 namespace App\Controller\Admin;
 
+use App\Entity\AddressLocality;
 use App\Entity\Category;
 use App\Entity\Customer;
 use App\Entity\CourierPayout;
@@ -16,6 +17,7 @@ use App\Entity\DeliveryPointTimeWindow;
 use App\Entity\DeliveryPricingZone;
 use App\Entity\DeliveryZone;
 use App\Entity\EmailLog;
+use App\Entity\FaqEntry;
 use App\Entity\HodinaSetting;
 use App\Entity\LaunchSubscriber;
 use App\Entity\OrderItem;
@@ -23,7 +25,9 @@ use App\Entity\Product;
 use App\Entity\ProductDeliveryPoint;
 use App\Entity\Seller;
 use App\Entity\SmsLog;
+use App\Entity\SupportTicket;
 use Doctrine\ORM\EntityManagerInterface;
+use EasyCorp\Bundle\EasyAdminBundle\Attribute\AdminDashboard;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Assets;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -35,6 +39,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
+#[AdminDashboard(routePath: '/ouegnewe', routeName: 'backoffice')]
 #[IsGranted('ROLE_ADMIN')]
 class DashboardController extends AbstractDashboardController
 {
@@ -54,9 +59,9 @@ class DashboardController extends AbstractDashboardController
 
     /**
      * Entrée backoffice.
+     * Route déclarée par #[AdminDashboard] sur la classe pour compatibilité EasyAdmin 4.24+/5.
      * IMPORTANT : index() doit rester sans argument (signature parent).
      */
-    #[Route('/ouegnewe', name: 'backoffice')]
     public function index(): Response
     {
         return $this->redirectToRoute('backoffice_dashboard');
@@ -170,6 +175,7 @@ class DashboardController extends AbstractDashboardController
             ->setController(HodinaSettingPaymentsCrudController::class);
         yield MenuItem::linkToCrud('Technique / maintenance', 'fa fa-tools', HodinaSetting::class)
             ->setController(HodinaSettingTechnicalCrudController::class);
+        yield MenuItem::linkToRoute('Réglages IA', 'fa fa-robot', 'admin_ai_chatbot_setting_entry');
         yield MenuItem::linkToRoute('Initialiser préouverture', 'fa fa-hourglass-start', 'admin_sales_opening_init');
 
         yield MenuItem::section('Logistique');
@@ -215,6 +221,12 @@ class DashboardController extends AbstractDashboardController
             ->setController(CourierPayoutCrudController::class);
         yield MenuItem::linkToCrud('Lignes rémunération', 'fa fa-receipt', CourierPayoutLine::class)
             ->setController(CourierPayoutLineCrudController::class);
+
+        yield MenuItem::section('Support');
+        yield MenuItem::linkToCrud('Tickets support', 'fa fa-life-ring', SupportTicket::class)
+            ->setController(SupportTicketCrudController::class);
+        yield MenuItem::linkToCrud('FAQ', 'fa fa-question-circle', FaqEntry::class)
+            ->setController(FaqEntryCrudController::class);
 
         yield MenuItem::section('Logs');
         yield MenuItem::linkToCrud('Adhésions clients', 'fas fa-user-check', CustomerSignup::class);

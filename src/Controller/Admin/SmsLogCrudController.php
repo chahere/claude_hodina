@@ -3,6 +3,7 @@
 namespace App\Controller\Admin;
 
 use App\Entity\SmsLog;
+use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
@@ -13,6 +14,10 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\DateTimeField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\IdField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
+use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
 
 final class SmsLogCrudController extends AbstractCrudController
 {
@@ -40,13 +45,56 @@ final class SmsLogCrudController extends AbstractCrudController
                 'class' => 'btn btn-success',
             ]);
 
+        $clearAll = Action::new('clearAllSmsLogs', 'Vider les SMS logs', 'fa fa-trash')
+            ->createAsGlobalAction()
+            ->linkToRoute('admin_sms_log_clear')
+            ->setCssClass('btn btn-danger');
+
         return $actions
             ->disable(Action::NEW)/*, Action::EDIT, Action::DELETE)*/
             ->add(Crud::PAGE_INDEX, Action::DETAIL)
             ->add(Crud::PAGE_INDEX, $sendSms)
             ->add(Crud::PAGE_DETAIL, $sendSms)
+            ->add(Crud::PAGE_INDEX, $clearAll)
             ->update(Crud::PAGE_INDEX, Action::DETAIL, static fn (Action $action): Action => $action->setLabel('Voir'))
             ->update(Crud::PAGE_DETAIL, Action::INDEX, static fn (Action $action): Action => $action->setLabel('Retour aux SMS'));
+    }
+
+    #[Route('/ouegnewe/sms-logs/vider', name: 'admin_sms_log_clear')]
+    public function clearAll(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator): Response
+    {
+        $count = (int) $entityManager->createQuery('SELECT COUNT(s.id) FROM '.SmsLog::class.' s')->getSingleScalarResult();
+
+        if ($request->isMethod('POST')) {
+            $token = (string) $request->request->get('_token');
+            if (!$this->isCsrfTokenValid('clear_sms_logs', $token)) {
+                throw $this->createAccessDeniedException('Jeton CSRF invalide.');
+            }
+
+            $entityManager->createQuery('DELETE FROM '.SmsLog::class.' s')->execute();
+
+            $this->addFlash('success', sprintf('%d SMS log(s) supprimé(s).', $count));
+
+            return $this->redirect($this->buildIndexUrl($adminUrlGenerator));
+        }
+
+        return $this->render('admin/_clear_all_confirm.html.twig', [
+            'title' => 'Vider les SMS logs',
+            'entityLabel' => 'SMS log(s)',
+            'count' => $count,
+            'warningText' => 'Cette action supprime définitivement tous les SMS logs enregistrés, y compris ceux liés à des commandes existantes. Elle est irréversible.',
+            'csrfTokenId' => 'clear_sms_logs',
+            'cancelUrl' => $this->buildIndexUrl($adminUrlGenerator),
+        ]);
+    }
+
+    private function buildIndexUrl(AdminUrlGenerator $adminUrlGenerator): string
+    {
+        return $adminUrlGenerator
+            ->unsetAll()
+            ->setController(self::class)
+            ->setAction(Action::INDEX)
+            ->generateUrl();
     }
 
     private static function canOpenSmsUrl(SmsLog $smsLog): bool

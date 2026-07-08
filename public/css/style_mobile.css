@@ -3999,3 +3999,384 @@ body.address-picker-open{
 .account-ajax-toast.is-warning{
   background:#92400e;
 }
+
+/* ===========================
+   Widget flottant "Assistant Hodina" (J5AE) — moteur à règles, pas d'IA
+   =========================== */
+
+.sr-only{
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hodina-chat-widget__toggle{
+  position: fixed;
+  right: 16px;
+  bottom: 96px;
+  /* Toujours au-dessus du panneau (2001) : le bouton reste visible et
+     déplaçable même quand le panneau est ouvert et le recouvre visuellement. */
+  z-index: 2002;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  border: none;
+  background: var(--brand);
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  padding: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Sans cette règle, toggle.hidden=true (JS) n'a aucun effet visuel : une
+   règle d'auteur (display:flex ci-dessus) l'emporte toujours sur la règle
+   par défaut du navigateur pour [hidden], même à spécificité égale. Même
+   correctif déjà en place pour .hodina-chat-widget__panel[hidden]. */
+.hodina-chat-widget__toggle[hidden]{
+  display: none;
+}
+
+.hodina-chat-widget__toggle:hover,
+.hodina-chat-widget__toggle:focus-visible{
+  background: var(--brand-2);
+}
+
+.hodina-chat-widget__toggle.is-dragging{
+  cursor: grabbing;
+  box-shadow: 0 16px 32px rgba(0,0,0,.22);
+}
+
+.hodina-chat-widget__toggle-icon{
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  border-radius: 999px;
+  background: #fff;
+  padding: 4px;
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: none;
+}
+
+.hodina-chat-widget__panel{
+  position: fixed;
+  z-index: 2001;
+  /* Position/largeur de repli avant l'exécution du JS (repositionPanelNearToggle
+     s'exécute ensuite sur tous les écrans, mobile compris : le panneau est
+     une fenêtre compacte ancrée au-dessus du bouton, jamais une feuille
+     pleine largeur). */
+  right: 16px;
+  bottom: 110px;
+  left: auto;
+  top: auto;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: 560px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  /* Filet de sécurité : si le contenu (formulaire d'escalade + suggestions +
+     messages) dépasse malgré tout max-height, on scrolle DANS le panneau
+     plutôt que de laisser la boîte s'étendre hors de sa position (le header
+     et sa croix de fermeture doivent toujours rester atteignables). */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.hodina-chat-widget__panel[hidden]{
+  display: none;
+}
+
+.hodina-chat-widget__header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .85rem 1rem;
+  background: var(--brand);
+  color: #fff;
+  flex: 0 0 auto;
+  /* Reste toujours visible (donc la croix de fermeture toujours cliquable)
+     même si le panneau doit défiler en interne (cf. .hodina-chat-widget__panel). */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.hodina-chat-widget__header-brand{
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-weight: 800;
+}
+
+.hodina-chat-widget__header-logo{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #fff;
+  padding: 2px;
+  object-fit: contain;
+}
+
+.hodina-chat-widget__header-actions{
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__close,
+.hodina-chat-widget__maximize{
+  appearance: none;
+  border: none;
+  background: rgba(255,255,255,.18);
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__maximize-icon{
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+}
+
+/* Agrandissement plein écran : mobile uniquement (le panneau desktop est
+   déjà une petite fenêtre, l'agrandir n'a pas de sens). */
+@media (min-width: 720px){
+  .hodina-chat-widget__maximize{
+    display: none;
+  }
+}
+
+.hodina-chat-widget__messages{
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  background: var(--card);
+  /* Volontairement bas : avec le formulaire d'escalade ET les suggestions
+     rapides visibles en même temps que les messages, un min-height élevé
+     forçait le panneau entier à dépasser sa max-height (le header pouvait
+     alors sortir de l'écran). Cette zone a sa propre barre de défilement. */
+  min-height: 72px;
+}
+
+.hodina-chat-widget__bubble{
+  max-width: 85%;
+  padding: .6rem .85rem;
+  border-radius: 16px;
+  font-size: .92rem;
+  line-height: 1.35;
+  box-shadow: 0 2px 6px rgba(0,0,0,.05);
+}
+
+.hodina-chat-widget__bubble p{
+  margin: 0;
+  white-space: pre-line;
+}
+
+.hodina-chat-widget__bubble--assistant{
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+
+.hodina-chat-widget__bubble--user{
+  align-self: flex-end;
+  background: var(--brand);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.hodina-chat-widget__bubble--typing{
+  font-style: italic;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--border);
+}
+
+.hodina-chat-widget__bubble-action{
+  display: inline-block;
+  margin-top: .5rem;
+  font-weight: 700;
+  color: var(--brand-2);
+  text-decoration: underline;
+}
+
+.hodina-chat-widget__quick-replies{
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding: 0 1rem .75rem;
+  background: var(--card);
+  flex: 0 0 auto;
+}
+
+/* Sans ces deux règles, [hidden] (JS) est sans effet : display:flex
+   ci-dessus (règle d'auteur) l'emporte toujours sur la règle par défaut du
+   navigateur pour [hidden]. Le formulaire d'escalade en particulier
+   s'affichait alors en permanence dès l'ouverture du chat, même sur le
+   simple message d'accueil (cause réelle du panneau "trop grand" sur
+   iPhone — sans rapport avec vh/dvh ni le cache). */
+.hodina-chat-widget__quick-replies[hidden],
+.hodina-chat-widget__escalate[hidden]{
+  display: none;
+}
+
+.hodina-chat-widget__quick-reply{
+  appearance: none;
+  border: 1px solid var(--brand);
+  color: var(--brand-2);
+  background: #fff;
+  border-radius: 999px;
+  padding: .4rem .75rem;
+  font-size: .82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hodina-chat-widget__quick-reply:hover{
+  background: var(--brand);
+  color: #fff;
+}
+
+.hodina-chat-widget__escalate{
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  padding: .85rem 1rem;
+  border-top: 1px solid var(--border);
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__escalate-intro{
+  margin: 0;
+  font-size: .85rem;
+  color: var(--muted);
+}
+
+.hodina-chat-widget__escalate input,
+.hodina-chat-widget__escalate textarea{
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: .55rem .7rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.hodina-chat-widget__escalate textarea{
+  min-height: 70px;
+  resize: vertical;
+}
+
+.hodina-chat-widget__honeypot{
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.hodina-chat-widget__form-error{
+  margin: 0;
+  color: #991b1b;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.hodina-chat-widget__escalate-actions{
+  display: flex;
+  gap: .5rem;
+}
+
+.hodina-chat-widget__btn{
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  border-radius: 999px;
+  padding: .5rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hodina-chat-widget__btn--primary{
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+.hodina-chat-widget__composer{
+  display: flex;
+  gap: .5rem;
+  padding: .75rem;
+  border-top: 1px solid var(--border);
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__composer input{
+  flex: 1 1 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: .6rem 1rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.hodina-chat-widget__send{
+  appearance: none;
+  border: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.hodina-chat-widget__send:hover{
+  background: var(--brand-2);
+}
+
+@media (min-width: 720px){
+  .hodina-chat-widget__toggle{
+    right: 24px;
+    bottom: 32px;
+  }
+}

@@ -12,7 +12,11 @@
     <link rel="icon" type="image/png" href="{{ asset('images/favicon-32x32.png') }}?v=j5y-d-ter" sizes="32x32">
     <link rel="apple-touch-icon" href="{{ asset('images/apple-touch-icon.png') }}?v=j5y-d-ter">
 
-    <link rel="stylesheet" href="{{ asset('css/style_mobile.css') }}">
+    {# ?v= : casse le cache navigateur (Safari iOS le garde agressivement en
+       navigation normale, contrairement aux fenêtres privées utilisées en
+       test desktop). À incrémenter à chaque modification notable de ce
+       fichier — cf. favicons ci-dessus pour la même convention. #}
+    <link rel="stylesheet" href="{{ asset('css/style_mobile.css') }}?v=j5ae-widget-4">
 
     {% block stylesheets %}{% endblock %}
 </head>
@@ -136,6 +140,7 @@
             <h2 class="footer-heading">Pratique</h2>
             <a href="{{ path('app_cgv') }}">CGV</a>
             <a href="{{ path('app_cgu') }}">CGU</a>
+            <a href="{{ path('app_contact') }}">Nous contacter</a>
             <a href="mailto:contact@hodina.fr" class="footer-contact">contact@hodina.fr</a>
         </section>
     </div>
@@ -146,6 +151,9 @@
     </div>
 </footer>
 
+{% block chat_widget %}
+    {% include 'support/_chat_widget.html.twig' %}
+{% endblock %}
 
 <script>
 (function () {

@@ -1,3 +1,9 @@
-body {
-    background-color: skyblue;
-}
+/*
+ * Hodina — feuille AssetMapper (entrée « app »).
+ *
+ * Les styles publics mobile-first sont portés par public/css/style_mobile.css.
+ * Ce fichier doit rester neutre tant qu'une vraie migration CSS vers AssetMapper
+ * n'est pas décidée : il est importé via assets/app.js et, s'il définit un
+ * background sur body, il écrase le thème blanc Hodina (bug « portail bleu »).
+ * Ne rien remettre ici sans intention explicite.
+ */

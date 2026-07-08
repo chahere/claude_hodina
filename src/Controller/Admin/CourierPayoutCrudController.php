@@ -9,7 +9,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\ChoiceField;
@@ -22,6 +21,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Field\MoneyField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextField;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -144,9 +144,9 @@ final class CourierPayoutCrudController extends AbstractCrudController
         return $this->redirect($this->buildIndexUrl($adminUrlGenerator));
     }
 
-    public function validatePayout(AdminContext $context, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator): Response
+    public function validatePayout(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator): Response
     {
-        $payout = $this->getPayoutFromContext($context);
+        $payout = $this->getPayoutFromRequest($request, $entityManager);
 
         try {
             $payout->validate();
@@ -159,9 +159,9 @@ final class CourierPayoutCrudController extends AbstractCrudController
         return $this->redirect($this->buildDetailUrl($adminUrlGenerator, $payout));
     }
 
-    public function markPaid(AdminContext $context, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator): Response
+    public function markPaid(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator): Response
     {
-        $payout = $this->getPayoutFromContext($context);
+        $payout = $this->getPayoutFromRequest($request, $entityManager);
 
         try {
             $payout->markPaid();
@@ -174,9 +174,9 @@ final class CourierPayoutCrudController extends AbstractCrudController
         return $this->redirect($this->buildDetailUrl($adminUrlGenerator, $payout));
     }
 
-    public function cancelPayout(AdminContext $context, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator): Response
+    public function cancelPayout(Request $request, EntityManagerInterface $entityManager, AdminUrlGenerator $adminUrlGenerator): Response
     {
-        $payout = $this->getPayoutFromContext($context);
+        $payout = $this->getPayoutFromRequest($request, $entityManager);
 
         try {
             $payout->cancel();
@@ -189,9 +189,16 @@ final class CourierPayoutCrudController extends AbstractCrudController
         return $this->redirect($this->buildDetailUrl($adminUrlGenerator, $payout));
     }
 
-    private function getPayoutFromContext(AdminContext $context): CourierPayout
+    /**
+     * Charge la rémunération directement via entityId (query string), sans dépendre
+     * du contexte CRUD d'EasyAdmin : AdminContext::getEntity() peut lever
+     * "Cannot get entity outside of a CRUD context" sur certaines actions custom
+     * selon la version d'EasyAdminBundle installée.
+     */
+    private function getPayoutFromRequest(Request $request, EntityManagerInterface $entityManager): CourierPayout
     {
-        $payout = $context->getEntity()?->getInstance();
+        $entityId = $request->query->get('entityId');
+        $payout = $entityId !== null && $entityId !== '' ? $entityManager->getRepository(CourierPayout::class)->find($entityId) : null;
 
         if (!$payout instanceof CourierPayout) {
             throw $this->createNotFoundException('Rémunération livreur introuvable.');

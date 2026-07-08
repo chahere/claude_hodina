@@ -2065,3 +2065,30 @@ J5AA livré : J5AA-0, J5AA-A, J5AA-B validés recette + production 2026-07-04.
 recette-j5aa-address-locality-20260704
 prod-j5aa-address-locality-20260704
 ```
+
+# Statut détaillé 08/07/2026 — J5AD/J5AE (recette), J5AF (recette), correctif AdminContext, J5AG, production en attente
+
+## Supersession
+
+Le bloc « Statut détaillé 05/07/2026 — J5AA livré » ci-dessus reste valable pour tout ce qui est antérieur ou égal à J5AA. Ce bloc ajoute l'état des lots développés depuis, tous portés depuis `chahere/claude_hodina` vers `chahere/hodina`.
+
+## Statut produit actuel
+
+```text
+MVP validé production jusqu'à J5AA.
+J5AD (chatbot IA client + support) : validé recette (tag recette-j5ad-j5ae-assistant-hodina-20260708c). Statut production non confirmé.
+J5AE (widget Assistant Hodina) : validé recette (même tag que J5AD). Statut production non confirmé.
+J5AF (suppression pilote corrigée + anonymisation RGPD) : validé recette (tag recette-j5af-suppression-anonymisation-client-20260708, sortie complète du script de déploiement confirmée). Non déployé production.
+Correctif transverse AdminContext::getEntity() (Customer/CustomerOrder/SupportTicket/CourierPayout) : testé localement sur hodina.fr. Tag recette-j5ag-fix-admincontext-20260708 créé et poussé — déploiement recette réel non confirmé par une sortie de script.
+J5AG (gestion logs SMS/e-mails + checklist minimale) : testé localement sur hodina.fr. Tag recette-j5ag-gestion-logs-sms-email-20260708 créé et poussé — déploiement recette réel non confirmé par une sortie de script.
+```
+
+## Risques ouverts
+
+- Avant toute mise en production de J5AF, du correctif AdminContext ou de J5AG : confirmer l'exécution réelle du déploiement recette (sortie de `tools/deploy-hodina-by-tag.sh`) pour les tags qui n'ont pas encore cette confirmation, et dérouler la checklist minimale (`docs/DEPLOIEMENT_PREPROD.md`) en recette avant de tagger la production.
+- Le statut production de J5AD/J5AE n'est pas confirmé dans cette période de suivi — à vérifier avant de le considérer acquis (ne pas supposer qu'un déploiement recette réussi implique automatiquement une mise en production).
+- Le piège `AdminContext::getEntity()` (EasyAdminBundle, dépend de la version installée) a déjà touché 4 contrôleurs à ce jour (`Customer`, `CustomerOrder`, `SupportTicket`, `CourierPayout`). Tout nouveau contrôleur admin ajoutant une action custom via `linkToCrudAction` doit appliquer le pattern `entityId` + `EntityManagerInterface` dès l'écriture (voir `CLAUDE.md` piège n°11).
+
+## Changement de méthode de travail
+
+À partir du 08/07/2026, le développement Hodina avec Claude Code se fait directement sur `D:\hodina\hodina.fr` (dépôt `chahere/hodina`), sans passer par le dépôt sandbox `chahere/claude_hodina` ni par un portage manuel par patch à chaque lot. `CLAUDE.md` et `.claude/skills/hodina-core/SKILL.md` ont été fusionnés (contenu des deux dépôts) pour qu'une nouvelle session locale retrouve directement tout le contexte.

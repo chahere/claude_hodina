@@ -38,6 +38,7 @@ Le MVP ne doit pas être réécrit inutilement. Toute modification doit être ci
 8. Toujours distinguer local, recette et production.
 9. Ne jamais proposer de push ou de modification directe depuis recette/prod.
 10. Toujours terminer par les tests à lancer et les risques de régression.
+11. Ne jamais présenter ces tests comme déjà validés si le sandbox ne permet pas de les exécuter réellement (pas de `vendor/`, pas de `bin/console`, pas de serveur) : le dire explicitement — « non testé en conditions réelles » — plutôt que de laisser croire à une validation. Incident réel (2026-07-08) : une action EasyAdmin custom livrée sans exécution réelle a cassé au premier clic (`AdminContext::getEntity()` hors contexte CRUD) — indétectable par simple relecture de code.
 
 ## Architecture Symfony attendue
 
@@ -97,6 +98,8 @@ Pour l’administration :
 - préserver les actions métier existantes ;
 - afficher les informations utiles au terrain ;
 - vérifier les impacts sur commandes, vendeurs, produits et livraison.
+
+**Action CRUD custom (`Action::new(...)->linkToCrudAction(...)`)** : ne jamais dépendre de `$context->getEntity()` (`AdminContext`) pour récupérer l'entité dans la méthode. Selon la version d'EasyAdminBundle réellement installée (sujette à dérive sur ce projet), ça peut lever `LogicException: Cannot get entity outside of a CRUD context` dès le premier appel, même avec `entityId` correct dans l'URL — le `?->` nullsafe ne protège pas contre une méthode qui lève avant de retourner. Charger l'entité directement depuis `entityId` (query string) via `EntityManagerInterface->getRepository(...)->find(...)`. Détail : `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §12, exemple dans `CustomerCrudController::findCustomerFromRequest()`.
 
 ## Twig / UX mobile
 
@@ -160,3 +163,32 @@ Avant de proposer un commit, vérifier :
 git status
 git diff --stat
 git diff --name-status
+```
+
+## Format de livraison des commandes (local Windows / PowerShell)
+
+Quand une commande doit être lancée depuis le projet, la fournir dans un **bloc unique copiable** commençant par `cd`, une commande par ligne :
+
+```powershell
+cd D:\hodina\claude_hodina
+git pull origin <branche>
+php -d memory_limit=-1 bin/console cache:clear --no-warmup
+php -d memory_limit=-1 bin/console cache:warmup
+```
+
+Règles :
+
+- Toujours démarrer le bloc par `cd D:\hodina\claude_hodina` (chemin local du projet).
+- Après tout `git pull`, changement de code, de config ou de réglage compilé, **inclure la régénération du cache** en mode mémoire-safe : `cache:clear --no-warmup` puis `cache:warmup`. La limite PHP 128 Mo fait planter le `cache:clear` standard (OOM Twig). Noter que `cache:cache` n'existe pas.
+- Préciser le rôle de chaque commande si ce n'est pas évident.
+- Pour lancer/relancer le serveur : `symfony server:start --no-tls` (jamais `php -S … public/index.php`).
+
+## Base de données locale : copie, dump/import, encodage, migrations
+
+Règles issues d'incidents réels (détail et commandes : `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §9-11).
+
+- **Jamais `doctrine:database:drop` ni écraser une base contenant des données.** Corriger par migration défensive ou réalignement du suivi, jamais par un reset.
+- **Copier des données entre deux bases locales (Windows) : ne jamais utiliser le `>` de PowerShell.** Il réencode la sortie en UTF-16 (import refusé : `ASCII '\0' appeared`) ou transcode les accents (`é`→`├®`, `à`→`├á`). Laisser `mariadb-dump` écrire le fichier avec `--result-file`, importer avec `cmd /c "mariadb … < fichier.sql"`, et `--default-character-set=utf8mb4` **des deux côtés**.
+- **Prouver l'encodage contre les octets réels** avant/après : `SELECT HEX(col)` — `C3A9`=`é` / `C3A0`=`à` sains ; `C383C2A9`/`C383C2A0` = double-encodage latin1 ; octet isolé (`E9`, `E0`) = colonne latin1.
+- **Après import d'un dump de prod**, `doctrine_migration_versions` est écrasée par la prod → `migrations:migrate` tente de recréer des tables existantes (`schema:validate` reste pourtant vert). Réaligner avec `doctrine:migrations:version '…\VersionXXX' --add` (ne touche que le suivi), jamais en droppant les tables du lot. Vérifier ensuite `migrations:migrate` (« Already at the latest version ») + `schema:validate`.
+- **Exécuter du SQL en local** : la commande DoctrineBundle est **`db:run-sql`** (pas `doctrine:query:sql`, inexistant → la console propose `doctrine:query:dql`, à refuser). Pour insérer de l'accentué sans le taper dans la console, l'injecter par ses octets : `CONVERT(UNHEX('C3A9') USING utf8mb4)` = `é`. Insert idempotent via `WHERE NOT EXISTS`.

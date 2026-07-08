@@ -15,6 +15,8 @@ set -Eeuo pipefail
 #   - backup DB avant migration ;
 #   - migrations Doctrine ;
 #   - compilation des assets Symfony AssetMapper en prod ;
+#   - publication des assets des bundles (EasyAdmin CSS/JS) via assets:install ;
+#   - vérification de l'entrée AssetMapper "admin" dans importmap.php ;
 #   - cache clear prod sans warmup direct, puis cache warmup séparé ;
 #   - validation Doctrine ;
 #   - cron Messenger contrôlé / ajouté ;
@@ -888,6 +890,81 @@ compile_asset_map_if_available() {
 }
 
 
+check_importmap_admin_entry() {
+  # importmap.php doit contenir l'entrée "admin" (DashboardController::configureAssets
+  # appelle ->addAssetMapperEntry('admin')). Sans elle, EasyAdmin lève
+  # « The entrypoint "admin" does not exist in importmap.php » (500 sur /ouegnewe).
+  # importmap.php est versionné : après un checkout de tag l'entrée doit être là.
+  if [ ! -f "importmap.php" ]; then
+    warn "importmap.php absent : AssetMapper mal configuré."
+    record_warn "importmap.php" "fichier absent"
+    return 0
+  fi
+
+  if grep -Eq "['\"]admin['\"][[:space:]]*=>" importmap.php; then
+    ok "Entrée AssetMapper 'admin' présente dans importmap.php."
+    record_ok "importmap.php" "entrée 'admin' présente"
+  else
+    warn "Entrée 'admin' absente de importmap.php : le backoffice EasyAdmin cassera (500 sur /ouegnewe)."
+    warn "Corriger : ajouter 'admin' => ['path' => './assets/admin.js', 'entrypoint' => true] et redéployer le tag."
+    record_warn "importmap.php" "entrée 'admin' absente, backoffice cassé"
+  fi
+}
+
+publish_bundle_assets() {
+  # Publie les assets web des bundles (EasyAdmin CSS/JS, etc.) dans public/bundles/.
+  # Indispensable après composer install/update : une montée de version de bundle
+  # change les hashs des fichiers publiés ; sans republication, le backoffice
+  # EasyAdmin s'affiche non stylé (404 sur /bundles/easyadmin/app.*.css, « rond bleu »).
+  # Complète asset-map:compile (qui, lui, ne gère que public/assets/).
+  if [ "$DRY_RUN" = "1" ]; then
+    warn "DRY_RUN=1 : assets:install non exécuté."
+    return 0
+  fi
+
+  if php_console list | grep -q "assets:install"; then
+    run_console assets:install public --env=prod
+
+    if [ -d "public/bundles/easyadmin" ] && find public/bundles/easyadmin -type f -name '*.css' 2>/dev/null | grep -q .; then
+      ok "Assets des bundles publiés (public/bundles/easyadmin présent et non vide)."
+    else
+      warn "assets:install exécuté mais public/bundles/easyadmin semble vide. Backoffice potentiellement non stylé."
+    fi
+  else
+    warn "Commande assets:install indisponible. Publication des assets bundles ignorée."
+  fi
+}
+
+check_ai_chatbot_runtime_dependencies() {
+  # Depuis le lot J5AD, config/packages/rate_limiter.yaml et http_client.yaml
+  # activent framework.rate_limiter / framework.http_client, qui EXIGENT les
+  # paquets symfony/rate-limiter et symfony/http-client. composer.json/lock
+  # n'étant pas versionnés dans ce dépôt, un simple checkout de tag ne les
+  # installe pas : sans eux, cache:warmup échoue à compiler le conteneur avec
+  # une erreur peu lisible. On le détecte tôt et on donne la commande exacte.
+  local missing=()
+
+  if [ -f "config/packages/rate_limiter.yaml" ] && [ ! -d "vendor/symfony/rate-limiter" ]; then
+    missing+=("symfony/rate-limiter")
+  fi
+  if [ -f "config/packages/http_client.yaml" ] && [ ! -d "vendor/symfony/http-client" ]; then
+    missing+=("symfony/http-client")
+  fi
+
+  if [ "${#missing[@]}" -eq 0 ]; then
+    ok "Dépendances runtime du lot J5AD présentes (ou non requises par ce tag)."
+    record_ok "Dépendances J5AD" "rate-limiter / http-client OK ou non requis"
+    return 0
+  fi
+
+  warn "Dépendances Composer requises par ce tag mais absentes de vendor/ : ${missing[*]}"
+  warn "config/packages/*.yaml les activent, mais composer.json/lock (non versionnés) ne les ont pas installées."
+  warn "cache:warmup va probablement échouer. Corriger sur le serveur puis relancer :"
+  warn "  composer require ${missing[*]}"
+  record_warn "Dépendances J5AD" "absentes : ${missing[*]} (composer require requis)"
+}
+
+
 count_runtime_upload_files() {
   if [ ! -d "public/uploads/products" ]; then
     printf '0\n'
@@ -1121,6 +1198,12 @@ final_deployment_checks() {
     record_ok "Assets compilés" "public/assets contient $asset_count fichier(s)"
   else
     record_warn "Assets compilés" "public/assets absent ou vide"
+  fi
+
+  if [ -d "public/bundles/easyadmin" ] && find public/bundles/easyadmin -type f -name '*.css' 2>/dev/null | grep -q .; then
+    record_ok "Assets EasyAdmin" "public/bundles/easyadmin publié"
+  else
+    record_warn "Assets EasyAdmin" "public/bundles/easyadmin absent/vide, lancer : php bin/console assets:install public"
   fi
 
   if [ "$SKIP_BACKUP" = "1" ]; then
@@ -1393,13 +1476,21 @@ else
   info "Composer non lancé. Active avec RUN_COMPOSER=1 si nécessaire."
 fi
 
+info "Contrôle des dépendances Composer requises par ce tag (lot J5AD : rate limiter + http client)."
+check_ai_chatbot_runtime_dependencies
+
 log "11. Migrations Doctrine"
 run_console doctrine:migrations:status --env=prod
 run_console doctrine:migrations:migrate --no-interaction --env=prod
 
 log "12. Assets, cache prod optimisé et validations Doctrine"
+check_importmap_admin_entry
+
 info "Compilation des assets Symfony avant cache prod, nécessaire pour admin.js et les contrôleurs Stimulus en prod."
 compile_asset_map_if_available
+
+info "Publication des assets des bundles (EasyAdmin CSS/JS) dans public/bundles/, sinon backoffice non stylé (« rond bleu »)."
+publish_bundle_assets
 
 info "Nettoyage cache prod sécurisé : cache:clear --no-warmup, puis cache:warmup séparé."
 info "On évite de supprimer brutalement var/cache/prod pendant que le site tourne."

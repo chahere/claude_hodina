@@ -3266,3 +3266,16 @@ Pour `Address::TYPE_DELIVERY`, `commune + postalCode` doivent rester cohérents 
 ## CustomerOrder
 
 `CustomerOrder` ajoute `deliveryAddressLocalityName` pour snapshotter la localité de livraison au moment de la commande.
+
+# Entités J5AF — Anonymisation client
+
+## Customer
+
+Nouveaux champs :
+
+- `isActive` (bool, défaut `true`) : passe à `false` lors de l'anonymisation. Bloque la connexion via `CustomerUserChecker`. Ne pas modifier manuellement hors du service d'anonymisation.
+- `anonymizedAt` (`DateTimeImmutable` nullable) : date d'anonymisation. `null` = jamais anonymisé.
+
+Champs additifs : aucun champ existant retiré. Migration `Version20260708120000` (ajout), corrigée par `Version20260708130000` (le mapping Doctrine `#[ORM\Column]` sans `options` attend `TINYINT NOT NULL` sans largeur ni défaut — l'`ALTER` initial avait créé `TINYINT(1) NOT NULL DEFAULT 1`).
+
+Aucun nouveau champ sur `CustomerOrder`, `SupportTicket`, `ChatbotConversation` ou `CourierPayout` : l'anonymisation ne touche que l'identité du client, l'historique métier reste inchangé.
