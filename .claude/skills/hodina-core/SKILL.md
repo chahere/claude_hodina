@@ -38,6 +38,7 @@ Le MVP ne doit pas être réécrit inutilement. Toute modification doit être ci
 8. Toujours distinguer local, recette et production.
 9. Ne jamais proposer de push ou de modification directe depuis recette/prod.
 10. Toujours terminer par les tests à lancer et les risques de régression.
+11. Ne jamais présenter ces tests comme déjà validés si le sandbox ne permet pas de les exécuter réellement (pas de `vendor/`, pas de `bin/console`, pas de serveur) : le dire explicitement — « non testé en conditions réelles » — plutôt que de laisser croire à une validation. Incident réel (2026-07-08) : une action EasyAdmin custom livrée sans exécution réelle a cassé au premier clic (`AdminContext::getEntity()` hors contexte CRUD) — indétectable par simple relecture de code.
 
 ## Architecture Symfony attendue
 
@@ -97,6 +98,8 @@ Pour l’administration :
 - préserver les actions métier existantes ;
 - afficher les informations utiles au terrain ;
 - vérifier les impacts sur commandes, vendeurs, produits et livraison.
+
+**Action CRUD custom (`Action::new(...)->linkToCrudAction(...)`)** : ne jamais dépendre de `$context->getEntity()` (`AdminContext`) pour récupérer l'entité dans la méthode. Selon la version d'EasyAdminBundle réellement installée (sujette à dérive sur ce projet), ça peut lever `LogicException: Cannot get entity outside of a CRUD context` dès le premier appel, même avec `entityId` correct dans l'URL — le `?->` nullsafe ne protège pas contre une méthode qui lève avant de retourner. Charger l'entité directement depuis `entityId` (query string) via `EntityManagerInterface->getRepository(...)->find(...)`. Détail : `docs/NOTES_ENVIRONNEMENT_LOCAL_20260707.md` §12, exemple dans `CustomerCrudController::findCustomerFromRequest()`.
 
 ## Twig / UX mobile
 

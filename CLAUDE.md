@@ -20,6 +20,7 @@ Ce fichier est le point d'entrée. Il complète — sans les répéter — les r
 - **Ne jamais modifier une migration déjà jouée en recette/prod** sans demande explicite → nouvelle migration corrective à la place.
 - Nouvelle migration pour tout changement de schéma.
 - Toujours finir une réponse par : commandes de test à lancer + risques de régression.
+- **Ne jamais présenter des commandes de test comme une validation déjà faite si le sandbox ne permet pas de les exécuter réellement** (pas de `vendor/`, pas de `bin/console`, pas de serveur — voir § Environnement d'exécution). Le dire explicitement : « non testé en conditions réelles, voici comment le vérifier » — pas juste donner les commandes en laissant croire que c'est validé. Incident du 2026-07-08 : une action EasyAdmin custom livrée sans avoir pu être exécutée a cassé au premier clic réel (`AdminContext::getEntity()` hors contexte CRUD, piège n°11) — jamais détecté par lecture de code seule.
 
 ## Préférences de communication (utilisateur)
 
@@ -87,6 +88,8 @@ Symptôme → cause → correctif. Détail complet dans `docs/NOTES_ENVIRONNEMEN
    `--add` ne touche que la table de suivi. Jamais de drop pour « laisser recréer » (perte des données du lot). Les tables partagées (`hodina_setting`) étant écrasées par la prod, réinsérer les seeds perdus (piège n°10). Détail : NOTES §10.
 
 10. **Exécuter du SQL / insérer de l'accentué en local** → la commande DoctrineBundle est **`db:run-sql`** (pas `doctrine:query:sql`, inexistant). Ne pas taper l'accent dans la console (transite par l'ANSI → corrompu) ; l'injecter par ses octets UTF-8 : `CONVERT(UNHEX('C3A9') USING utf8mb4)` = `é`. Insert idempotent via `WHERE NOT EXISTS`. Détail : NOTES §11.
+
+11. **Action CRUD custom EasyAdmin (`linkToCrudAction`) : `AdminContext::getEntity()` peut lever « Cannot get entity outside of a CRUD context »** dès le premier appel de la méthode, même avec `crudAction`/`crudControllerFqcn`/`entityId` corrects dans l'URL — dépend de la version d'EasyAdminBundle réellement installée (sujette à dérive dans ce projet, cf. piège n°7). Ne jamais dépendre de `$context->getEntity()` dans une action custom : charger l'entité directement depuis `entityId` (query string) via l'`EntityManagerInterface`. Voir `CustomerCrudController::findCustomerFromRequest()`. Détail : NOTES §12.
 
 ## Assets / CSS
 

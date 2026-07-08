@@ -277,6 +277,42 @@ Cette variante **marque aussi** la migration comme appliquée → ne pas la cumu
 
 ---
 
+## 12. Action CRUD custom EasyAdmin : `AdminContext::getEntity()` hors contexte CRUD
+
+**Contexte** : lot J5AF (correctif suppression pilote + anonymisation client). Clic sur « Supprimer pilote » → 500 dès la première ligne de la méthode, avant même le code métier.
+
+**Symptôme** :
+```
+LogicException: Cannot get entity outside of a CRUD context. Check if getCrud() returns a value before calling getEntity().
+  at vendor\easycorp\easyadmin-bundle\src\Context\AdminContext.php:81
+  at EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext->getEntity()
+    (src\Controller\Admin\CustomerCrudController.php:240)
+```
+L'URL contient pourtant bien `crudAction=confirmPilotCascadeDelete&crudControllerFqcn=...&entityId=...` — le contexte CRUD ne se construit malgré tout pas correctement pour cette action custom sur la version d'EasyAdminBundle installée (le projet a déjà changé de version plusieurs fois, cf. piège n°7 / §7 ci-dessus).
+
+**Piège** : le pattern `$customer = $context->getEntity()?->getInstance();` (utilisé dans `confirmPilotCascadeDelete`, `confirmAnonymize`, `generatePasswordResetLink` de `CustomerCrudController`) suppose que `AdminContext` est toujours correctement peuplé dans une action `linkToCrudAction`. Le `?->` (nullsafe) ne protège que si `getEntity()` retourne `null` — pas si la méthode **lève une exception avant même de retourner**, ce qui est le cas ici.
+
+**Correctif** : ne pas dépendre du contexte CRUD d'EasyAdmin pour charger l'entité dans une action custom. Charger directement depuis `entityId` (query string, présent dans l'URL que l'action ait été ouverte en GET ou soumise en POST — un `<form method="post">` sans attribut `action` soumet vers l'URL courante, donc conserve la query string) via l'`EntityManagerInterface` :
+```php
+private function findCustomerFromRequest(Request $request, EntityManagerInterface $entityManager): ?Customer
+{
+    $entityId = $request->query->get('entityId');
+
+    if ($entityId === null || $entityId === '') {
+        return null;
+    }
+
+    $customer = $entityManager->getRepository(Customer::class)->find($entityId);
+
+    return $customer instanceof Customer ? $customer : null;
+}
+```
+Remplace `AdminContext $context` par `EntityManagerInterface $entityManager` dans la signature de chaque action custom concernée.
+
+**Non détecté avant livraison** : ce bug n'a pas pu être repéré par relecture de code dans le sandbox Claude Code (pas de `vendor/`, pas de serveur, impossible d'exécuter réellement une action EasyAdmin). Cf. règle ajoutée dans `CLAUDE.md` § Règles non négociables : dire explicitement quand un correctif EasyAdmin/Symfony n'a pas pu être exécuté en conditions réelles, plutôt que de donner des commandes de test comme si c'était déjà validé.
+
+---
+
 ## Séquence d'installation locale de référence (sans reset de base)
 
 > **Recopier des données de prod en local** : dumper/importer selon §9 (jamais le `>` de PowerShell), puis — si l'import a écrasé `doctrine_migration_versions` — réaligner le suivi selon §10 avant de relancer `migrations:migrate`, et réinsérer les seeds du lot en cours perdus (§11).
