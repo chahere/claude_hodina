@@ -106,24 +106,26 @@ Si la version PHP par défaut n'est pas la bonne :
 /opt/cpanel/ea-php82/root/usr/bin/php bin/console cache:clear --env=prod
 ```
 
-## Checklist test recette
+## Checklist minimale — TOUJOURS en premier, avant toute checklist spécifique à un lot
+
+Règle ajoutée le 2026-07-08. Objectif : vérifier que le client peut commander et utiliser le site sans friction, et que l'admin/le livreur peuvent utiliser leurs portails, **avant** de dérouler les tests spécifiques au lot déployé. Si un point échoue, ne pas continuer sur le reste des tests — c'est prioritaire sur tout, y compris sur la checklist du lot en cours.
 
 - [ ] HTTPS valide sur mobile et desktop.
 - [ ] HTTP redirige vers HTTPS.
-- [ ] Basic Auth fonctionne.
-- [ ] Catalogue accessible.
-- [ ] Inscription client fonctionne.
-- [ ] Nom obligatoire.
-- [ ] Login client fonctionne.
-- [ ] Checkout exige CGU/CGV.
-- [ ] Commande créée.
+- [ ] Basic Auth fonctionne (recette uniquement).
+- [ ] Catalogue accessible (accueil + fiche produit, images chargent).
+- [ ] Inscription nouveau client fonctionne (nom obligatoire).
+- [ ] **Connexion d'un client existant (créé avant ce déploiement) fonctionne.** Le test le plus important après un lot qui touche `Customer`, la sécurité ou EasyAdmin : un souci de mapping, de firewall ou de `UserChecker` peut bloquer tout le monde, pas seulement le cas visé par le lot.
+- [ ] Checkout exige CGU/CGV, CGU/CGV lisibles sur mobile.
+- [ ] Panier → checkout → commande validée, de bout en bout (livraison + frais calculés).
+- [ ] Commande invité, si le site l'autorise.
+- [ ] Statut commande + SMS fonctionne (SmsLog ouvre Messages iPhone).
+- [ ] Mot de passe oublié génère un SmsLog, reset password fonctionne.
 - [ ] Backoffice `/ouegnewe` accessible aux admins.
-- [ ] Statut + SMS fonctionne.
-- [ ] SmsLog ouvre Messages iPhone.
-- [ ] Mot de passe oublié génère SmsLog.
-- [ ] Reset password fonctionne.
+- [ ] Portail livreur `/djama` accessible aux livreurs, prise en charge d'une commande OK.
 - [ ] Footer public ne contient pas le lien Admin.
-- [ ] CGU / CGV lisibles sur mobile.
+
+Seulement après ces points validés : dérouler la checklist spécifique au lot déployé (section correspondante plus bas dans ce document, ou le `README_MAJ_*` du lot).
 
 
 ---

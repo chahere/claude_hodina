@@ -21,6 +21,7 @@ Ce fichier est le point d'entrée. Il complète — sans les répéter — les r
 - Nouvelle migration pour tout changement de schéma.
 - Toujours finir une réponse par : commandes de test à lancer + risques de régression.
 - **Ne jamais présenter des commandes de test comme une validation déjà faite si le sandbox ne permet pas de les exécuter réellement** (pas de `vendor/`, pas de `bin/console`, pas de serveur — voir § Environnement d'exécution). Le dire explicitement : « non testé en conditions réelles, voici comment le vérifier » — pas juste donner les commandes en laissant croire que c'est validé. Incident du 2026-07-08 : une action EasyAdmin custom livrée sans avoir pu être exécutée a cassé au premier clic réel (`AdminContext::getEntity()` hors contexte CRUD, piège n°11) — jamais détecté par lecture de code seule.
+- **Avant toute checklist spécifique à un lot en recette/prod, dérouler d'abord la checklist minimale** (`docs/DEPLOIEMENT_PREPROD.md` § Checklist minimale) : catalogue, inscription, connexion d'un client existant, panier/checkout/commande, backoffice, portail livreur. Ne pas continuer sur les tests du lot si un point de cette checklist échoue — le client doit pouvoir commander sans friction avant tout le reste.
 
 ## Préférences de communication (utilisateur)
 
