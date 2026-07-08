@@ -11,7 +11,6 @@ use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Actions;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Action;
 use EasyCorp\Bundle\EasyAdminBundle\Config\Crud;
-use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Router\AdminUrlGenerator;
 use EasyCorp\Bundle\EasyAdminBundle\Field\AssociationField;
 use EasyCorp\Bundle\EasyAdminBundle\Field\CollectionField;
@@ -168,11 +167,11 @@ class CustomerCrudController extends AbstractCrudController
     }
 
     public function generatePasswordResetLink(
-        AdminContext $context,
+        Request $request,
         EntityManagerInterface $entityManager,
         AdminUrlGenerator $adminUrlGenerator,
     ): Response {
-        $customer = $context->getEntity()?->getInstance();
+        $customer = $this->findCustomerFromRequest($request, $entityManager);
 
         if (!$customer instanceof Customer) {
             throw $this->createNotFoundException('Utilisateur introuvable.');
@@ -248,12 +247,12 @@ class CustomerCrudController extends AbstractCrudController
     }
 
     public function confirmPilotCascadeDelete(
-        AdminContext $context,
         Request $request,
+        EntityManagerInterface $entityManager,
         CustomerPilotCascadeDeleter $customerPilotCascadeDeleter,
         AdminUrlGenerator $adminUrlGenerator,
     ): Response {
-        $customer = $context->getEntity()?->getInstance();
+        $customer = $this->findCustomerFromRequest($request, $entityManager);
 
         if (!$customer instanceof Customer) {
             throw $this->createNotFoundException('Client introuvable.');
@@ -303,12 +302,12 @@ class CustomerCrudController extends AbstractCrudController
     }
 
     public function confirmAnonymize(
-        AdminContext $context,
         Request $request,
+        EntityManagerInterface $entityManager,
         CustomerAnonymizerService $customerAnonymizerService,
         AdminUrlGenerator $adminUrlGenerator,
     ): Response {
-        $customer = $context->getEntity()?->getInstance();
+        $customer = $this->findCustomerFromRequest($request, $entityManager);
 
         if (!$customer instanceof Customer) {
             throw $this->createNotFoundException('Client introuvable.');
@@ -355,6 +354,25 @@ class CustomerCrudController extends AbstractCrudController
             'preview' => $preview,
             'cancelUrl' => $this->buildCustomerDetailUrl($adminUrlGenerator, $customer),
         ]);
+    }
+
+    /**
+     * Charge le client directement via entityId (query string), sans dépendre du
+     * contexte CRUD d'EasyAdmin : AdminContext::getEntity() peut lever
+     * "Cannot get entity outside of a CRUD context" sur certaines actions custom
+     * selon la version d'EasyAdminBundle installée.
+     */
+    private function findCustomerFromRequest(Request $request, EntityManagerInterface $entityManager): ?Customer
+    {
+        $entityId = $request->query->get('entityId');
+
+        if ($entityId === null || $entityId === '') {
+            return null;
+        }
+
+        $customer = $entityManager->getRepository(Customer::class)->find($entityId);
+
+        return $customer instanceof Customer ? $customer : null;
     }
 
     private function buildCustomerDetailUrl(AdminUrlGenerator $adminUrlGenerator, Customer $customer): string
