@@ -16,6 +16,7 @@ security:
     main:
       lazy: true
       provider: app_customer_provider
+      user_checker: App\Security\CustomerUserChecker
 
       # ✅ Authenticator (Symfony 6.2+ / 8.x)
       # (le singulier "custom_authenticator" peut être ignoré selon la version)

@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Customer;
 use App\Entity\SmsLog;
+use App\Service\CustomerAnonymizerService;
 use App\Service\CustomerPilotCascadeDeleter;
 
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
@@ -94,6 +95,12 @@ class CustomerCrudController extends AbstractCrudController
             ->renderExpanded(false)
             ->setHelp('Sélectionne un ou plusieurs rôles. ROLE_USER est ajouté automatiquement. ROLE_COMMERCE_TESTER permet de tester panier et commande même si les commandes publiques sont bloquées.');
         yield BooleanField::new('isVerified');
+        yield BooleanField::new('isActive', 'Compte actif')
+            ->setHelp('Passe automatiquement à faux lors de l’anonymisation. Ne pas modifier manuellement.')
+            ->hideOnForm();
+        yield DateTimeField::new('anonymizedAt', 'Anonymisé le')
+            ->hideOnForm()
+            ->hideOnIndex();
 
         yield NumberField::new('courierPayoutCap', 'Plafond rémunération livreur (€)')
             ->setNumDecimals(2)
@@ -112,6 +119,13 @@ class CustomerCrudController extends AbstractCrudController
                 return !in_array('ROLE_ADMIN', $customer->getRoles(), true);
             });
 
+        $anonymize = Action::new('confirmAnonymize', 'Anonymiser', 'fa fa-user-secret')
+            ->linkToCrudAction('confirmAnonymize')
+            ->setCssClass('btn btn-warning')
+            ->displayIf(static function (Customer $customer): bool {
+                return !in_array('ROLE_ADMIN', $customer->getRoles(), true) && !$customer->isAnonymized();
+            });
+
         $generateResetLink = Action::new('generatePasswordResetLink', 'Lien reset', 'fa fa-key')
             ->linkToCrudAction('generatePasswordResetLink')
             ->setCssClass('btn btn-secondary')
@@ -122,6 +136,8 @@ class CustomerCrudController extends AbstractCrudController
         return $actions
             ->add(Crud::PAGE_INDEX, $generateResetLink)
             ->add(Crud::PAGE_DETAIL, $generateResetLink)
+            ->add(Crud::PAGE_INDEX, $anonymize)
+            ->add(Crud::PAGE_DETAIL, $anonymize)
             ->add(Crud::PAGE_INDEX, $deletePilot)
             ->add(Crud::PAGE_DETAIL, $deletePilot)
             ->disable(Action::DELETE)
@@ -267,17 +283,74 @@ class CustomerCrudController extends AbstractCrudController
             $summary = $customerPilotCascadeDeleter->delete($customer);
 
             $this->addFlash('success', sprintf(
-                'Client pilote #%d supprimé : %d commande(s), %d SMS log(s), %d adresse(s).',
+                'Client pilote #%d supprimé : %d commande(s), %d SMS log(s), %d adresse(s), %d conversation(s) IA, %d paiement(s) livreur.',
                 $customerId,
                 $summary['orders'],
                 $summary['smsLogs'],
-                $summary['addresses']
+                $summary['addresses'],
+                $summary['chatbotConversations'],
+                $summary['courierPayouts']
             ));
 
             return $this->redirect($this->buildCustomerIndexUrl($adminUrlGenerator));
         }
 
         return $this->render('admin/customer/pilot_cascade_delete.html.twig', [
+            'customer' => $customer,
+            'preview' => $preview,
+            'cancelUrl' => $this->buildCustomerDetailUrl($adminUrlGenerator, $customer),
+        ]);
+    }
+
+    public function confirmAnonymize(
+        AdminContext $context,
+        Request $request,
+        CustomerAnonymizerService $customerAnonymizerService,
+        AdminUrlGenerator $adminUrlGenerator,
+    ): Response {
+        $customer = $context->getEntity()?->getInstance();
+
+        if (!$customer instanceof Customer) {
+            throw $this->createNotFoundException('Client introuvable.');
+        }
+
+        if (in_array('ROLE_ADMIN', $customer->getRoles(), true)) {
+            $this->addFlash('danger', 'Impossible d’anonymiser un compte administrateur.');
+            return $this->redirect($this->buildCustomerDetailUrl($adminUrlGenerator, $customer));
+        }
+
+        $currentUser = $this->getUser();
+        if ($currentUser instanceof Customer && $currentUser->getId() === $customer->getId()) {
+            $this->addFlash('danger', 'Impossible d’anonymiser ton propre compte connecté.');
+            return $this->redirect($this->buildCustomerDetailUrl($adminUrlGenerator, $customer));
+        }
+
+        if ($customer->isAnonymized()) {
+            $this->addFlash('danger', 'Ce client est déjà anonymisé.');
+            return $this->redirect($this->buildCustomerDetailUrl($adminUrlGenerator, $customer));
+        }
+
+        $preview = $customerAnonymizerService->preview($customer);
+
+        if ($request->isMethod('POST')) {
+            $token = (string) $request->request->get('_token');
+            if (!$this->isCsrfTokenValid('anonymize_customer_' . $customer->getId(), $token)) {
+                throw $this->createAccessDeniedException('Jeton CSRF invalide.');
+            }
+
+            $customerId = $customer->getId();
+            $summary = $customerAnonymizerService->anonymize($customer);
+
+            $this->addFlash('success', sprintf(
+                'Client #%d anonymisé : %d adresse(s) supprimée(s). Commandes, tickets support et conversations IA conservés.',
+                $customerId,
+                $summary['addresses']
+            ));
+
+            return $this->redirect($this->buildCustomerIndexUrl($adminUrlGenerator));
+        }
+
+        return $this->render('admin/customer/anonymize_confirm.html.twig', [
             'customer' => $customer,
             'preview' => $preview,
             'cancelUrl' => $this->buildCustomerDetailUrl($adminUrlGenerator, $customer),
